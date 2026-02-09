@@ -1,0 +1,415 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: white;
+  border-bottom: 1px solid #e6e8f0;
+}
+
+.brandTitle {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.brandSubtitle {
+  font-size: 12px;
+  color: #475569;
+}
+
+.nav {
+  display: flex;
+  gap: 8px;
+}
+
+.navLink {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e6e8f0;
+  background: #fbfcff;
+}
+
+.navLink.active {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+.container {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px;
+  flex: 1;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 900px) {
+  .grid2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.card {
+  background: white;
+  border: 1px solid #e6e8f0;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.cardTitle {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 700px) {
+  .row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  border: 1px solid #e6e8f0;
+  background: #fbfcff;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.btn {
+  border: 1px solid #e6e8f0;
+  background: #0f172a;
+  color: white;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.btn.secondary {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.muted {
+  color: #475569;
+  font-size: 13px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #e6e8f0;
+  background: #fbfcff;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.alert {
+  border: 1px solid #e6e8f0;
+  background: white;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.alert.error {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.footer {
+  border-top: 1px solid #e6e8f0;
+  background: white;
+  padding: 12px 18px;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  font-size: 12px;
+  border: 1px solid #e6e8f0;
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.kvs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+@media (min-width: 700px) {
+  .kvs {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px dashed #e6e8f0;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.kv .k {
+  color: #475569;
+  font-size: 12px;
+}
+
+.kv .v {
+  font-weight: 700;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .statsGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.trustGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .trustGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.statCard {
+  background: white;
+  border: 1px solid #e6e8f0;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: #475569;
+}
+
+.statValue {
+  font-size: 22px;
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tab {
+  border: 1px solid #e6e8f0;
+  background: #fbfcff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.tabBadge {
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: white;
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.tableWrap {
+  overflow: auto;
+  border: 1px solid #e6e8f0;
+  border-radius: 14px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: white;
+}
+
+.table th,
+.table td {
+  padding: 12px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e6e8f0;
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.table th {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 700;
+  background: #fbfcff;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #e6e8f0;
+  background: #f8fafc;
+  font-size: 12px;
+}
+
+.statusPill.risky {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.vendorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.vendorTitle {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .metricsGrid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.feedbackRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 700px) {
+  .feedbackRow {
+    grid-template-columns: 120px 1fr;
+    align-items: start;
+  }
+}
+
+.feedbackScore {
+  border: 1px solid #e6e8f0;
+  background: #fbfcff;
+  border-radius: 14px;
+  padding: 10px;
+  text-align: center;
+}
+
+.feedbackScoreValue {
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 50;
+}
+
+.modalCard {
+  width: 100%;
+  max-width: 720px;
+  background: white;
+  border: 1px solid #e6e8f0;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
