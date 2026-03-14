@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@maxmind/geoip2-node": "^6.3.4",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.2.4",
@@ -20,7 +21,8 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.6",
     "morgan": "^1.10.1",
-    "nodemailer": "^8.0.1"
+    "nodemailer": "^8.0.1",
+    "undici": "^6.21.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"

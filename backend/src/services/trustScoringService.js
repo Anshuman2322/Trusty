@@ -163,7 +163,123 @@ function scoreDevicePattern({ deviceFeedbackCount }) {
   return { score: 2, maxScore, explanation: `Very high repetition from same device fingerprint (${deviceFeedbackCount + 1} total feedbacks).` };
 }
 
-// 5) Context Depth Score (max 15)
+function formatIpLocation({ city, region, country }) {
+  return [city, region, country].filter(Boolean).join(', ');
+}
+
+// 5) IP Pattern Check (max 10)
+// Soft signal only: 6/10 is neutral to avoid penalizing international customers.
+function scoreIpPattern({
+  hasIpHash,
+  isPublicIp,
+  ipFeedbackCount,
+  networkType = 'UNKNOWN',
+  riskLevel = 'UNKNOWN',
+  vpn = false,
+  proxy = false,
+  tor = false,
+  hosting = false,
+  datacenter = false,
+  fraudScore = null,
+  country = null,
+  region = null,
+  city = null,
+  countryRelation = 'UNKNOWN',
+  lookupFailed = false,
+}) {
+  const maxScore = 10;
+
+  if (!hasIpHash) {
+    return {
+      score: 6,
+      maxScore,
+      explanation: 'Client IP unavailable; IP signal treated as neutral.',
+      riskLevel: 'UNKNOWN',
+    };
+  }
+
+  if (!isPublicIp) {
+    return {
+      score: 6,
+      maxScore,
+      explanation: 'Private or local network detected; IP signal treated as neutral.',
+      riskLevel: 'UNKNOWN',
+    };
+  }
+
+  if (lookupFailed) {
+    return {
+      score: 6,
+      maxScore,
+      explanation: 'IP intelligence lookup unavailable; IP signal treated as neutral.',
+      riskLevel: 'UNKNOWN',
+    };
+  }
+
+  const normalizedNetworkType = tor
+    ? 'TOR'
+    : vpn || proxy
+      ? 'VPN'
+      : datacenter || hosting
+        ? 'DATACENTER'
+        : networkType || 'UNKNOWN';
+
+  const location = formatIpLocation({ city, region, country });
+  const reasons = [];
+  let score = 6;
+
+  if (normalizedNetworkType === 'RESIDENTIAL') {
+    score = 10;
+    reasons.push(location ? `Feedback submitted from a residential network in ${location}.` : 'Feedback submitted from a residential network.');
+  } else if (normalizedNetworkType === 'MOBILE') {
+    score = 8;
+    reasons.push(location ? `Feedback submitted from a mobile network in ${location}.` : 'Feedback submitted from a mobile network.');
+  } else if (normalizedNetworkType === 'BUSINESS') {
+    score = 7;
+    reasons.push(location ? `Feedback submitted from a business network in ${location}.` : 'Feedback submitted from a business network.');
+  } else if (normalizedNetworkType === 'DATACENTER') {
+    score = 4;
+    reasons.push(location ? `IP detected as datacenter or hosting infrastructure near ${location}.` : 'IP detected as datacenter or hosting infrastructure.');
+  } else if (normalizedNetworkType === 'VPN') {
+    score = 2;
+    reasons.push(location ? `IP detected as a VPN or proxy network near ${location}.` : 'IP detected as a VPN or proxy network.');
+  } else if (normalizedNetworkType === 'TOR') {
+    score = 0;
+    reasons.push(location ? `IP detected as a TOR exit node near ${location}.` : 'IP detected as a TOR exit node.');
+  } else {
+    reasons.push(location ? `IP resolved near ${location}, but the network type could not be classified with confidence.` : 'Network type could not be classified with confidence.');
+  }
+
+  if (fraudScore !== null && fraudScore !== undefined) {
+    reasons.push(`Fraud score ${Math.round(fraudScore)}/100.`);
+  }
+
+  if (ipFeedbackCount === null || ipFeedbackCount === undefined) {
+    reasons.push('Recent hashed-network repetition data was unavailable.');
+  } else if (ipFeedbackCount >= 3) {
+    score = Math.max(0, score - 2);
+    reasons.push(`Multiple recent reviews (${ipFeedbackCount + 1} total in 24h) came from the same hashed network.`);
+  } else if (ipFeedbackCount >= 1) {
+    reasons.push(`A small number of recent reviews (${ipFeedbackCount + 1} total in 24h) came from the same hashed network.`);
+  } else {
+    reasons.push('No recent repetition detected from the same hashed network.');
+  }
+
+  if (countryRelation === 'MATCH') {
+    reasons.push('IP country matches the order or payment location.');
+  } else if (countryRelation === 'MISMATCH') {
+    reasons.push('Location differs from the order location but may represent travel or an international customer.');
+  }
+
+  return {
+    score,
+    maxScore,
+    explanation: reasons.join(' '),
+    riskLevel,
+  };
+}
+
+// 6) Context Depth Score (max 15)
 // Measures specificity/authenticity, not positivity.
 function scoreContextDepth(text) {
   const maxScore = 15;
@@ -266,12 +382,91 @@ function trustBreakdownToLegacyList(trustBreakdown) {
       reason: trustBreakdown.devicePattern.explanation,
     },
     {
+      signal: 'IP Pattern Check',
+      maxPoints: trustBreakdown.ipPattern.maxScore,
+      points: trustBreakdown.ipPattern.score,
+      reason: trustBreakdown.ipPattern.explanation,
+    },
+    {
       signal: 'Context Depth Score',
       maxPoints: trustBreakdown.contextDepth.maxScore,
       points: trustBreakdown.contextDepth.score,
       reason: trustBreakdown.contextDepth.explanation,
     },
   ];
+}
+
+function computeDuplicateAdjustment({
+  maxSim = 0,
+  exactDupDifferentDevice = false,
+  exactDupRecentCount = 0,
+  embeddingAvailable = true,
+}) {
+  const repeatCount = Number.isFinite(exactDupRecentCount) ? Math.max(0, Math.trunc(exactDupRecentCount)) : 0;
+
+  if (exactDupDifferentDevice) {
+    return { adj: -12, reason: 'Exact text hash seen from a different device.' };
+  }
+  if (maxSim >= 0.95) return { adj: -12, reason: `Near-duplicate similarity ${maxSim.toFixed(3)}.` };
+  if (maxSim >= 0.92) return { adj: -8, reason: `Likely duplicate similarity ${maxSim.toFixed(3)}.` };
+  if (maxSim >= 0.88) return { adj: -4, reason: `Possible reuse similarity ${maxSim.toFixed(3)}.` };
+
+  if (repeatCount >= 5) {
+    return { adj: -8, reason: `Exact text hash repeated ${repeatCount} previous time(s).` };
+  }
+  if (repeatCount >= 2) {
+    return { adj: -5, reason: `Exact text hash repeated ${repeatCount} previous time(s).` };
+  }
+  if (repeatCount >= 1) {
+    return { adj: -3, reason: `Exact text hash repeated ${repeatCount} previous time(s).` };
+  }
+
+  if (!embeddingAvailable) {
+    return { adj: 0, reason: 'No exact duplicate hash found; semantic duplicate service unavailable.' };
+  }
+
+  return { adj: 0, reason: 'No near-duplicate detected.' };
+}
+
+function computeTypingVarianceAdjustment({
+  varianceZ,
+  editCount,
+  typingTimeMs,
+  typingIntervalsCount = 0,
+  baselineSampleCount = 0,
+  hasTypingSignal = true,
+}) {
+  const baselineTarget = 5;
+  const baselineCount = Number.isFinite(baselineSampleCount) ? Math.max(0, Math.trunc(baselineSampleCount)) : 0;
+
+  if (varianceZ === null || varianceZ === undefined || Number.isNaN(varianceZ)) {
+    if (!hasTypingSignal || typingIntervalsCount < 2 || typingTimeMs <= 0) {
+      return { adj: 0, reason: 'Typing signal insufficient; adjustment kept neutral.' };
+    }
+
+    if (editCount <= 0 && typingTimeMs < 4000) {
+      return { adj: -2, reason: 'Fast submission with no edits; small penalty while typing baseline builds.' };
+    }
+
+    if (editCount >= 3 && typingTimeMs >= 10000) {
+      return { adj: 1, reason: 'Edits and longer typing suggest human input; small bonus while typing baseline builds.' };
+    }
+
+    return {
+      adj: 0,
+      reason: `Typing baseline building (${Math.min(baselineCount, baselineTarget)}/${baselineTarget} samples); adjustment kept neutral.`,
+    };
+  }
+  if (varianceZ <= -2.0 && editCount <= 1 && typingTimeMs < 4000) {
+    return { adj: -5, reason: `Very low variance (z=${varianceZ.toFixed(2)}), fast and low edits.` };
+  }
+  if (varianceZ <= -1.0 && editCount <= 1) {
+    return { adj: -3, reason: `Low variance (z=${varianceZ.toFixed(2)}) with minimal edits.` };
+  }
+  if (varianceZ >= 1.0 && editCount >= 2) {
+    return { adj: 2, reason: `High variance (z=${varianceZ.toFixed(2)}) with edits (human-like).` };
+  }
+  return { adj: 0, reason: 'Typing variance within normal range.' };
 }
 
 module.exports = {
@@ -281,7 +476,10 @@ module.exports = {
   scorePaymentProof,
   scoreAiBehavior,
   scoreDevicePattern,
+  scoreIpPattern,
   scoreContextDepth,
   computeTrustLevel,
   trustBreakdownToLegacyList,
+  computeDuplicateAdjustment,
+  computeTypingVarianceAdjustment,
 };

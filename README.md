@@ -15,6 +15,9 @@ This is a demo-ready full-stack project with **three UI roles** and a backend tr
 2) (Optional) Create env file:
 
 - Copy [backend/.env.example](backend/.env.example) → `backend/.env`
+	- Set `EMBEDDING_SERVICE_URL` if running the embedding service (default is http://localhost:8010)
+	- Set `IPQUALITYSCORE_API_KEY` for VPN/proxy/TOR detection
+	- Download `GeoLite2-City.mmdb` and `GeoLite2-ASN.mmdb`, then either place them under `backend/data/` or point `MAXMIND_CITY_DB_PATH` and `MAXMIND_ASN_DB_PATH` to the local files
 
 3) Seed demo data:
 
@@ -27,6 +30,14 @@ This is a demo-ready full-stack project with **three UI roles** and a backend tr
 Frontend: `http://localhost:5173`
 
 Backend: `http://localhost:5000/api/health`
+
+Embedding service (optional): `http://localhost:8010/health`
+
+## IP Intelligence Setup
+
+- The feedback IP signal stays soft: feedback is never blocked on IP alone.
+- Raw IP addresses are never stored. Only `ipHash`, coarse location, and `ipRiskLevel` are persisted.
+- If MaxMind or IPQualityScore is unavailable, the IP signal falls back to a neutral score.
 
 ## Demo notes
 

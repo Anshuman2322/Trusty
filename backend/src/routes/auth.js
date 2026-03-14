@@ -3,6 +3,7 @@ const express = require('express');
 const User = require('../models/User');
 const Vendor = require('../models/Vendor');
 const { signToken, verifyPassword, httpError } = require('../services/authService');
+const { withMongoReadRetry } = require('../services/mongoReadRetry');
 const { requireAuth } = require('../middleware/authMiddleware');
 
 const authRouter = express.Router();
@@ -13,7 +14,7 @@ authRouter.post('/login', async (req, res, next) => {
     const password = String(req.body?.password || '');
     if (!email || !password) throw httpError(400, 'email and password are required', 'VALIDATION');
 
-    const user = await User.findOne({ email }).lean();
+    const user = await withMongoReadRetry('auth login user lookup', async () => User.findOne({ email }).lean());
     if (!user) throw httpError(401, 'Invalid credentials', 'AUTH');
 
     const ok = await verifyPassword(password, user.passwordHash);
@@ -28,7 +29,7 @@ authRouter.post('/login', async (req, res, next) => {
 
     let vendorName = null;
     if (user.vendorId) {
-      const v = await Vendor.findById(user.vendorId).lean();
+      const v = await withMongoReadRetry('auth login vendor lookup', async () => Vendor.findById(user.vendorId).lean());
       vendorName = v?.name || null;
     }
 

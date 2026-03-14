@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, apiPost } from '../lib/api'
+import { FeedbackExplanation } from '../components/FeedbackExplanation'
 import { clearSession, getSession, setSession } from '../lib/session'
 
 const DELIVERY_OPTIONS = [
@@ -25,10 +26,43 @@ function trustLabel(score) {
   return 'Low'
 }
 
+function trustTone(score) {
+  const n = Number(score || 0)
+  if (n >= 71) return 'good'
+  if (n >= 40) return 'warn'
+  return 'bad'
+}
+
+function trustBadgeClass(score) {
+  const n = Number(score || 0)
+  if (n >= 71) return 'badge badge--trusted'
+  if (n >= 40) return 'badge badge--medium'
+  return 'badge badge--risky'
+}
+
 function pillClass(kind) {
-  if (kind === 'PAID' || kind === 'DELIVERED') return 'statusPill'
-  if (kind === 'PENDING') return 'statusPill risky'
+  const normalized = String(kind || '').toUpperCase()
+  if (normalized === 'PAID') return 'statusPill paid'
+  if (normalized === 'PENDING') return 'statusPill pending'
+  if (normalized === 'DELIVERED') return 'statusPill delivered'
+  if (
+    normalized === 'DISPATCHED' ||
+    normalized === 'IN_TRANSIT' ||
+    normalized === 'OUT_FOR_DELIVERY' ||
+    normalized === 'IN_CUSTOMS' ||
+    normalized === 'OUT_OF_CUSTOMS'
+  ) {
+    return 'statusPill info'
+  }
   return 'statusPill'
+}
+
+function feedbackTagClass(tag) {
+  if (tag === 'AI Verified') return 'pill pill--ai'
+  if (tag === 'Blockchain Anchored' || tag === 'Blockchain Verified') return 'pill pill--blockchain'
+  if (tag === 'Payment Verified') return 'pill pill--payment'
+  if (tag === 'Delivered') return 'pill pill--delivered'
+  return 'pill'
 }
 
 function formatDate(iso) {
@@ -36,6 +70,47 @@ function formatDate(iso) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString()
+}
+
+function formatScore(n, digits = 3) {
+  const v = Number(n)
+  if (Number.isNaN(v)) return '—'
+  return v.toFixed(digits)
+}
+
+function formatLocationText(location) {
+  if (!location) return 'Location unavailable'
+  const parts = [location.city, location.state, location.country || location.countryCode]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+  return parts.length ? parts.join(', ') : 'Location unavailable'
+}
+
+function formatOrderActionLocation(location, label) {
+  return `${label}: ${formatLocationText(location)}`
+}
+
+function formatFeedbackLocation(feedback) {
+  return formatLocationText({
+    city: feedback?.ipCity,
+    state: feedback?.ipState || feedback?.ipRegion,
+    country: feedback?.ipCountryName || feedback?.ipCountry,
+  })
+}
+
+function TrustScoreDial({ score }) {
+  const n = Number(score)
+  const safe = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0
+  const tone = trustTone(safe)
+
+  return (
+    <div className={`trustDial trustDial--${tone}`} style={{ '--progress': `${safe}%` }}>
+      <div className="trustDialInner">
+        <div className="trustDialValue">{safe}</div>
+        <div className="trustDialLabel">out of 100</div>
+      </div>
+    </div>
+  )
 }
 
 export function VendorDashboard({ defaultVendorId }) {
@@ -235,25 +310,42 @@ export function VendorDashboard({ defaultVendorId }) {
         <div style={{ height: 10 }} />
 
         <div className="metricsGrid">
-          <div className="statCard">
-            <div className="statLabel">Total Orders</div>
+          <div className="statCard metricCard metricCard--orders">
+            <div className="statHead">
+              <span className="statIcon">OR</span>
+              <div className="statLabel">Total Orders</div>
+            </div>
             <div className="statValue">{overview?.totalOrders ?? '—'}</div>
           </div>
-          <div className="statCard">
-            <div className="statLabel">Pending Payments</div>
+          <div className="statCard metricCard metricCard--payments">
+            <div className="statHead">
+              <span className="statIcon">PY</span>
+              <div className="statLabel">Pending Payments</div>
+            </div>
             <div className="statValue">{overview?.pendingPayments ?? '—'}</div>
           </div>
-          <div className="statCard">
-            <div className="statLabel">Delivered Orders</div>
+          <div className="statCard metricCard metricCard--delivered">
+            <div className="statHead">
+              <span className="statIcon">DL</span>
+              <div className="statLabel">Delivered Orders</div>
+            </div>
             <div className="statValue">{overview?.deliveredOrders ?? '—'}</div>
           </div>
-          <div className="statCard">
-            <div className="statLabel">Trust Score</div>
-            <div className="statValue">{overview?.averageTrustScore ?? '—'}</div>
-            <div className="muted">{trustLabel(overview?.averageTrustScore)}</div>
+          <div className="statCard metricCard metricCard--trust">
+            <div className="statHead">
+              <span className="statIcon">TS</span>
+              <div className="statLabel">Trust Score</div>
+            </div>
+            <div className="trustDialWrap">
+              <TrustScoreDial score={overview?.averageTrustScore} />
+            </div>
+            <div className={trustBadgeClass(overview?.averageTrustScore)}>{trustLabel(overview?.averageTrustScore)} Confidence</div>
           </div>
-          <div className="statCard">
-            <div className="statLabel">Total Feedback</div>
+          <div className="statCard metricCard metricCard--feedback">
+            <div className="statHead">
+              <span className="statIcon">FB</span>
+              <div className="statLabel">Total Feedback</div>
+            </div>
             <div className="statValue">{overview?.totalFeedbackCount ?? '—'}</div>
           </div>
         </div>
@@ -332,10 +424,14 @@ export function VendorDashboard({ defaultVendorId }) {
                         <td>
                           <div><b>{o.customerName}</b></div>
                           <div className="muted">{o.email}</div>
+                          <div className="muted">{formatOrderActionLocation(o.createdLocation, 'Order')}</div>
                         </td>
                         <td><b>{o.productDetails}</b></td>
                         <td>₹{o.price}</td>
-                        <td><span className={pillClass(o.paymentStatus)}>{o.paymentStatus}</span></td>
+                        <td>
+                          <div><span className={pillClass(o.paymentStatus)}>{o.paymentStatus}</span></div>
+                          <div className="muted">{formatOrderActionLocation(o.paymentLocation, 'Payment')}</div>
+                        </td>
                         <td>
                           <button className="btn" type="button" onClick={() => onConfirmPayment(o._id)}>
                             Confirm
@@ -358,7 +454,7 @@ export function VendorDashboard({ defaultVendorId }) {
             <div className="list">
               {feedbacks.length === 0 ? <div className="muted">No feedbacks yet.</div> : null}
               {feedbacks.map((f) => (
-                <div key={f._id} className="card">
+                <div key={f._id} className="card reviewCard">
                   <div className="feedbackRow">
                     <div className="feedbackScore">
                       <div className="feedbackScoreValue">{f.trustScore}</div>
@@ -366,18 +462,28 @@ export function VendorDashboard({ defaultVendorId }) {
                     </div>
                     <div className="feedbackBody">
                       <div className="pillRow" style={{ marginBottom: 8 }}>
-                        <span className="pill">{f.trustLevel}</span>
-                        <span className="pill">{(f.trustBreakdown?.tokenVerification?.score || 0) > 0 ? 'Verified' : 'Anonymous'}</span>
-                        {f.blockchain?.txRef ? <span className="pill">Blockchain Anchored</span> : null}
-                        {(f.tags || []).filter((t) => t !== 'Blockchain Anchored').slice(0, 6).map((t) => (
-                          <span key={t} className="pill">{t}</span>
+                        <span className={trustBadgeClass(f.trustScore)}>{f.trustLevel}</span>
+                        <span className={f.codeValid ? 'pill pill--payment' : 'pill'}>{f.codeValid ? 'Verified' : 'Anonymous'}</span>
+                        {f.blockchain?.txRef ? <span className="pill pill--blockchain">Blockchain Anchored</span> : null}
+                        {(f.tags || []).filter((t) => t !== 'Blockchain Anchored' && t !== 'Verified').slice(0, 6).map((t) => (
+                          <span key={t} className={feedbackTagClass(t)}>{t}</span>
                         ))}
                       </div>
                       <div>{f.text}</div>
                       <div style={{ height: 8 }} />
                       <div className="muted">
+                        Location: {formatFeedbackLocation(f)} · Risk: {f.ipRiskLevel || 'UNKNOWN'}
+                      </div>
+                      <div style={{ height: 6 }} />
+                      <div className="muted">
+                        DupAdj: {f.dupAdj ?? 0} · MaxSim: {formatScore(f.embeddingAudit?.maxSim)}
+                        {f.embeddingAudit?.modelVersion ? ` · ${f.embeddingAudit.modelVersion}` : ''}
+                      </div>
+                      <div style={{ height: 6 }} />
+                      <div className="muted">
                         {formatDate(f.createdAt)} · {f.blockchain?.txRef ? `${String(f.blockchain.txRef).slice(0, 12)}…` : '—'}
                       </div>
+                      <FeedbackExplanation feedback={f} buttonLabel="Why this score and tags?" />
                     </div>
                   </div>
                 </div>
@@ -452,6 +558,10 @@ export function VendorDashboard({ defaultVendorId }) {
               <div className="k">Feedback Code</div>
               <div className="v">{createResult.order?.feedbackCode || '—'}</div>
             </div>
+            <div className="kv">
+              <div className="k">Order Location</div>
+              <div className="v">{formatLocationText(createResult.order?.createdLocation)}</div>
+            </div>
           </div>
           <div className="muted">Email is simulated (printed in backend console).</div>
         </section>
@@ -488,10 +598,14 @@ function OrderRow({ order, onUpdateDelivery }) {
       <td>
         <div><b>{order.customerName}</b></div>
         <div className="muted">{order.email}</div>
+        <div className="muted">{formatOrderActionLocation(order.createdLocation, 'Order')}</div>
       </td>
       <td><b>{order.productDetails}</b></td>
       <td>₹{order.price}</td>
-      <td><span className={pillClass(order.paymentStatus)}>{order.paymentStatus}</span></td>
+      <td>
+        <div><span className={pillClass(order.paymentStatus)}>{order.paymentStatus}</span></div>
+        <div className="muted">{formatOrderActionLocation(order.paymentLocation, 'Payment')}</div>
+      </td>
       <td><span className={pillClass(order.deliveryStatus)}>{order.deliveryStatus}</span></td>
       <td><span className="pill">{order.feedbackCode}</span></td>
       <td>

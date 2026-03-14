@@ -1,11 +1,139 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { apiGet, apiPost } from '../lib/api'
+import { FeedbackExplanation } from '../components/FeedbackExplanation'
 import { getDeviceFingerprintHash, getOrCreateSessionId } from '../lib/device'
 
 function formatTrustLevel(level) {
   if (!level) return '—'
   return level.charAt(0) + level.slice(1).toLowerCase()
+}
+
+function reviewTrustTone(score) {
+  const n = Number(score || 0)
+  if (n >= 71) return 'high'
+  if (n >= 40) return 'medium'
+  return 'low'
+}
+
+function reviewTrustPillClass(score) {
+  const tone = reviewTrustTone(score)
+  if (tone === 'high') return 'publicTrustPill publicTrustPill--high'
+  if (tone === 'medium') return 'publicTrustPill publicTrustPill--medium'
+  return 'publicTrustPill publicTrustPill--low'
+}
+
+function reviewTrustLabel(score) {
+  const tone = reviewTrustTone(score)
+  if (tone === 'high') return 'High Trust'
+  if (tone === 'medium') return 'Medium Trust'
+  return 'Low Trust'
+}
+
+function TrustPillIcon() {
+  return (
+    <span className="publicTrustIcon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" focusable="false" aria-hidden="true">
+        <path d="M12 3l7 3v5c0 5-3.2 8.6-7 10-3.8-1.4-7-5-7-10V6l7-3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M8.7 11.8l2.1 2.1 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  )
+}
+
+function reviewScoreRingClass(score) {
+  const tone = reviewTrustTone(score)
+  if (tone === 'high') return 'reviewScoreRing reviewScoreRing--high'
+  if (tone === 'medium') return 'reviewScoreRing reviewScoreRing--medium'
+  return 'reviewScoreRing reviewScoreRing--low'
+}
+
+function clampReviewScore(score) {
+  const n = Number(score || 0)
+  if (Number.isNaN(n)) return 0
+  return Math.max(0, Math.min(100, Math.round(n)))
+}
+
+function formatReviewDate(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function roleTagMeta(tag) {
+  if (tag === 'AI Verified') return { label: 'AI Verified', className: 'pill pill--ai', iconKind: 'ai' }
+  if (tag === 'Blockchain Anchored' || tag === 'Blockchain Verified') {
+    return { label: 'Blockchain Verified', className: 'pill pill--blockchain', iconKind: 'blockchain' }
+  }
+  if (tag === 'Payment Verified') return { label: 'Payment Verified', className: 'pill pill--payment', iconKind: 'payment' }
+  if (tag === 'Delivered') return { label: 'Delivered', className: 'pill pill--delivered', iconKind: 'delivered' }
+  return { label: tag, className: 'pill', iconKind: 'generic' }
+}
+
+function RoleTagIcon({ kind }) {
+  if (kind === 'ai') {
+    return (
+      <span className="tagRoleIcon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" focusable="false" aria-hidden="true">
+          <rect x="6" y="8" width="12" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
+          <path d="M10 12h4M9 15h6M12 6V4M4 11h2M18 11h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+    )
+  }
+
+  if (kind === 'blockchain') {
+    return (
+      <span className="tagRoleIcon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" focusable="false" aria-hidden="true">
+          <path d="M9.5 8.5l2.3-2.3a3.2 3.2 0 014.5 4.5l-2.2 2.2M14.5 15.5l-2.3 2.3a3.2 3.2 0 11-4.5-4.5l2.2-2.2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M9 15l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </span>
+    )
+  }
+
+  if (kind === 'payment') {
+    return (
+      <span className="tagRoleIcon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" focusable="false" aria-hidden="true">
+          <rect x="3.5" y="6" width="17" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+          <path d="M3.5 10h17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </span>
+    )
+  }
+
+  if (kind === 'delivered') {
+    return (
+      <span className="tagRoleIcon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" focusable="false" aria-hidden="true">
+          <path d="M12 3l7 4-7 4-7-4 7-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M5 7v8l7 4 7-4V7M12 11v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+    )
+  }
+
+  return (
+    <span className="tagRoleIcon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" focusable="false" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" fill="currentColor" />
+      </svg>
+    </span>
+  )
+}
+
+function formatLocationText(location) {
+  if (!location) return 'Location unavailable'
+  const parts = [location.city, location.state, location.country || location.countryCode]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+  return parts.length ? parts.join(', ') : 'Location unavailable'
 }
 
 export function PublicView({ vendors, defaultVendorId }) {
@@ -30,6 +158,8 @@ export function PublicView({ vendors, defaultVendorId }) {
   const firstInputRef = useRef(null)
   const lastLengthRef = useRef(0)
   const maxDeltaCharsRef = useRef(0)
+  const lastInputTsRef = useRef(null)
+  const intervalsRef = useRef([])
 
   const [submitState, setSubmitState] = useState({ submitting: false, result: null, warning: '' })
 
@@ -115,13 +245,32 @@ export function PublicView({ vendors, defaultVendorId }) {
       const editCount = editCountRef.current
       const firstInputGapMs = firstInputRef.current ? Date.now() - firstInputRef.current : 0
       const maxDeltaChars = maxDeltaCharsRef.current
+      const intervals = intervalsRef.current || []
+      const typingIntervalsCount = intervals.length
+      let typingIntervalMeanMs = 0
+      let typingIntervalVarianceMs2 = 0
+
+      if (typingIntervalsCount >= 2) {
+        const sum = intervals.reduce((acc, v) => acc + v, 0)
+        typingIntervalMeanMs = sum / typingIntervalsCount
+        const varianceSum = intervals.reduce((acc, v) => acc + Math.pow(v - typingIntervalMeanMs, 2), 0)
+        typingIntervalVarianceMs2 = varianceSum / typingIntervalsCount
+      }
 
       const body = {
         text: trimmed,
         code: mode === 'verified' ? code.trim() : '',
         deviceHash,
         sessionId,
-        behavior: { typingTimeMs, editCount, maxDeltaChars, firstInputGapMs },
+        behavior: {
+          typingTimeMs,
+          editCount,
+          maxDeltaChars,
+          firstInputGapMs,
+          typingIntervalsCount,
+          typingIntervalMeanMs,
+          typingIntervalVarianceMs2,
+        },
         notReceived,
       }
 
@@ -138,6 +287,8 @@ export function PublicView({ vendors, defaultVendorId }) {
       firstInputRef.current = null
       lastLengthRef.current = 0
       maxDeltaCharsRef.current = 0
+      lastInputTsRef.current = null
+      intervalsRef.current = []
       setText('')
       setNotReceived(false)
       await refresh()
@@ -150,6 +301,16 @@ export function PublicView({ vendors, defaultVendorId }) {
     if (!typingStartRef.current) typingStartRef.current = Date.now()
     if (!firstInputRef.current) firstInputRef.current = Date.now()
     editCountRef.current += 1
+
+    const now = Date.now()
+    if (lastInputTsRef.current) {
+      const delta = now - lastInputTsRef.current
+      if (delta > 0 && delta <= 5000) {
+        intervalsRef.current.push(delta)
+        if (intervalsRef.current.length > 200) intervalsRef.current.shift()
+      }
+    }
+    lastInputTsRef.current = now
 
     const prevLen = lastLengthRef.current || 0
     const delta = Math.abs((next || '').length - prevLen)
@@ -203,7 +364,7 @@ export function PublicView({ vendors, defaultVendorId }) {
       <section className="card">
         <div className="cardTitle">Submit Feedback (anonymous or optional code)</div>
         <div className="muted">
-          Privacy by design: no IP/GPS/identity stored. Only a hashed device fingerprint + behavior signals.
+          Privacy by design: raw IP is never stored. The system keeps only a hashed IP plus coarse country/state/city metadata and behavior signals.
         </div>
 
         <div style={{ height: 10 }} />
@@ -308,52 +469,18 @@ export function PublicView({ vendors, defaultVendorId }) {
                 <div className="k">Anchored Hash</div>
                 <div className="v">{submitState.result.blockchain?.hash?.slice(0, 12)}…</div>
               </div>
+              <div className="kv">
+                <div className="k">Detected Location</div>
+                <div className="v">{formatLocationText(submitState.result.location)}</div>
+              </div>
+              <div className="kv">
+                <div className="k">Location Risk</div>
+                <div className="v">{submitState.result.ipRiskLevel || 'UNKNOWN'}</div>
+              </div>
             </div>
 
             <div style={{ height: 10 }} />
-            <div className="cardTitle">Trust breakdown (explainable)</div>
-            <div className="list">
-              {(() => {
-                const r = submitState.result || {}
-                const legacy = Array.isArray(r.trustBreakdown) ? r.trustBreakdown : Array.isArray(r.trustBreakdownList) ? r.trustBreakdownList : []
-                const obj = r.trustBreakdown && !Array.isArray(r.trustBreakdown) ? r.trustBreakdown : null
-
-                if (obj) {
-                  const rows = [
-                    { label: 'Token Verification', v: obj.tokenVerification },
-                    { label: 'Payment Proof', v: obj.paymentProof },
-                    { label: 'AI Behavior Score', v: obj.aiBehavior },
-                    { label: 'Device Pattern Score', v: obj.devicePattern },
-                    { label: 'Context Depth Score', v: obj.contextDepth },
-                  ]
-                  return rows.map((row) => (
-                    <div key={row.label} className="kv">
-                      <div>
-                        <div className="k">{row.label}</div>
-                        <div className="muted">{row.v?.explanation}</div>
-                      </div>
-                      <div className="v">
-                        {row.v?.score}/{row.v?.maxScore}
-                      </div>
-                    </div>
-                  ))
-                }
-
-                return legacy.map((b, idx) => (
-                  <div key={idx} className="kv">
-                    <div>
-                      <div className="k">{b.signal}</div>
-                      <div className="muted">{b.reason}</div>
-                    </div>
-                    <div className="v">{b.points}</div>
-                  </div>
-                ))
-              })()}
-            </div>
-
-            <div style={{ height: 10 }} />
-            <div className="cardTitle">Explanation</div>
-            <div className="muted">{submitState.result.explanation}</div>
+            <FeedbackExplanation feedback={submitState.result} buttonLabel="Why this score and tags?" />
           </div>
         ) : null}
       </section>
@@ -365,24 +492,40 @@ export function PublicView({ vendors, defaultVendorId }) {
         <div style={{ height: 10 }} />
         <div className="list">
           {feedbacks.length === 0 ? <div className="muted">No feedbacks yet.</div> : null}
-          {feedbacks.map((f) => (
-            <div key={f._id} className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <div className="badge">Trust Score: {f.trustScore}</div>
-                <div className="badge">Trust Level: {formatTrustLevel(f.trustLevel)}</div>
+          {feedbacks.map((f) => {
+            const score = clampReviewScore(f.trustScore)
+            return (
+              <div key={f._id} className="card publicReviewCard">
+                <div className="publicReviewLayout">
+                  <div className={reviewScoreRingClass(score)} style={{ '--ring-progress': `${score}%` }}>
+                    <span className="reviewScoreRingValue">{score}</span>
+                  </div>
+                  <div className="publicReviewContent">
+                    <div className="publicReviewMeta">
+                      <span className={reviewTrustPillClass(score)}>
+                        <TrustPillIcon />
+                        <span>{reviewTrustLabel(score)}</span>
+                      </span>
+                      <span className="publicReviewDate">{formatReviewDate(f.createdAt)}</span>
+                    </div>
+                    <div className="publicReviewText">{f.text}</div>
+                    <div className="pillRow reviewTags">
+                      {(f.tags || []).map((t, idx) => {
+                        const tagMeta = roleTagMeta(t)
+                        return (
+                          <span key={`${t}-${idx}`} className={tagMeta.className}>
+                            <RoleTagIcon kind={tagMeta.iconKind} />
+                            <span>{tagMeta.label}</span>
+                          </span>
+                        )
+                      })}
+                    </div>
+                    <FeedbackExplanation feedback={f} buttonLabel="Why this score and explanation" />
+                  </div>
+                </div>
               </div>
-              <div style={{ height: 8 }} />
-              <div>{f.text}</div>
-              <div style={{ height: 8 }} />
-              <div className="pillRow">
-                {(f.tags || []).map((t) => (
-                  <span key={t} className="pill">
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
     </div>

@@ -1,10 +1,9 @@
 const express = require('express');
 
-const Vendor = require('../models/Vendor');
 const Feedback = require('../models/Feedback');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
-const { computeVendorAdminProfile } = require('../services/vendorService');
-const { computeAdminOverview, computeAlerts } = require('../services/adminService');
+const { withMongoReadRetry } = require('../services/mongoReadRetry');
+const { computeAdminOverview, listAdminVendors, computeAlerts } = require('../services/adminService');
 const { sendEmail } = require('../services/emailService');
 
 const adminRouter = express.Router();
@@ -12,29 +11,48 @@ const adminRouter = express.Router();
 adminRouter.use(requireAuth);
 adminRouter.use(requireRole('ADMIN'));
 
-adminRouter.get('/overview', async (req, res) => {
-  const overview = await computeAdminOverview();
-  res.json({ ok: true, overview });
-});
-
-adminRouter.get('/vendors', async (req, res, next) => {
+adminRouter.get('/overview', async (req, res, next) => {
   try {
-    const vendors = await Vendor.find({}).sort({ createdAt: -1 }).lean();
-    const enriched = await Promise.all(vendors.map((v) => computeVendorAdminProfile(v._id)));
-    res.json({ ok: true, vendors: enriched });
+    const overview = await computeAdminOverview();
+    res.json({ ok: true, overview });
   } catch (err) {
     next(err);
   }
 });
 
-adminRouter.get('/feedbacks', async (req, res) => {
-  const feedbacks = await Feedback.find({}).sort({ createdAt: -1 }).lean();
-  res.json({ ok: true, feedbacks });
+adminRouter.get('/vendors', async (req, res, next) => {
+  try {
+    const vendors = await listAdminVendors();
+    res.json({ ok: true, vendors });
+  } catch (err) {
+    next(err);
+  }
 });
 
-adminRouter.get('/alerts', async (req, res) => {
-  const alerts = await computeAlerts();
-  res.json({ ok: true, alerts });
+adminRouter.get('/feedbacks', async (req, res, next) => {
+  try {
+    const rawLimit = Number(req.query?.limit || 0);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.trunc(rawLimit), 500) : 0;
+
+    const feedbacks = await withMongoReadRetry('admin feedbacks', async () => {
+      const query = Feedback.find({}).sort({ createdAt: -1 }).read('secondaryPreferred').lean();
+      if (limit > 0) query.limit(limit);
+      return query;
+    });
+
+    res.json({ ok: true, feedbacks });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.get('/alerts', async (req, res, next) => {
+  try {
+    const alerts = await computeAlerts();
+    res.json({ ok: true, alerts });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Sends a test email to the configured SMTP_FROM address to validate SMTP settings.

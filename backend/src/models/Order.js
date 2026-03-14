@@ -10,6 +10,23 @@ const DeliveryEventSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const RequestLocationSchema = new mongoose.Schema(
+  {
+    ipHash: { type: String },
+    countryCode: { type: String },
+    country: { type: String },
+    state: { type: String },
+    city: { type: String },
+    timezone: { type: String },
+    riskLevel: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'UNKNOWN'], default: 'UNKNOWN' },
+    source: { type: String, default: 'unknown' },
+    isPublicIp: { type: Boolean, default: false },
+    lookupFailed: { type: Boolean, default: false },
+    capturedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const OrderSchema = new mongoose.Schema(
   {
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true, index: true },
@@ -42,6 +59,8 @@ const OrderSchema = new mongoose.Schema(
     deliveryHistory: { type: [DeliveryEventSchema], default: [] },
 
     feedbackCode: { type: String, required: true, unique: true, index: true },
+    createdLocation: { type: RequestLocationSchema },
+    paymentLocation: { type: RequestLocationSchema },
   },
   { timestamps: true }
 );
