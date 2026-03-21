@@ -59,6 +59,15 @@ const BlockchainSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const ServiceHighlightsSchema = new mongoose.Schema(
+  {
+    response: { type: Boolean, default: false },
+    quality: { type: Boolean, default: false },
+    delivery: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const FeedbackSchema = new mongoose.Schema(
   {
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true, index: true },
@@ -93,6 +102,11 @@ const FeedbackSchema = new mongoose.Schema(
     typingVarianceZ: { type: Number },
 
     notReceived: { type: Boolean, default: false },
+  displayName: { type: String, trim: true, maxlength: 80 },
+  displayCountry: { type: String, trim: true, maxlength: 80 },
+  productName: { type: String, trim: true, maxlength: 140 },
+  serviceHighlights: { type: ServiceHighlightsSchema, default: () => ({}) },
+    rating: { type: Number, min: 1, max: 5 },
 
     // Stored for backward compatibility with existing UI.
     trustScore: { type: Number, required: true, min: 0, max: 100, index: true },

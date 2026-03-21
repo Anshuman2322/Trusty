@@ -1,7 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
-import { apiGet, apiPost } from '../lib/api'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { FeedbackExplanation } from '../components/FeedbackExplanation'
-import { clearSession, getSession, setSession } from '../lib/session'
+import {
+  AlertsPanel,
+  AnalyticsPage,
+  ChartsSection,
+  CustomerInsights,
+  DashboardCards,
+  InsightsPanel,
+  OrdersTable,
+  Sidebar,
+  buildAlerts,
+  buildCustomerInsights,
+  buildFeedbackDistribution,
+  buildOrdersVsFeedback,
+  buildQuickInsights,
+  buildTrustTrend,
+  mapFeedbackByOrderId,
+  normalizeScore,
+  trustLabel,
+} from '../components/vendorDashboard'
+import { ProfilePage } from '../components/vendorProfile'
+import { SettingsPage } from '../components/vendorSettings'
+import { apiGet, apiPost } from '../lib/api'
+import { clearSession, getSession } from '../lib/session'
+import './VendorDashboard.css'
 
 const DELIVERY_OPTIONS = [
   'CREATED',
@@ -13,69 +36,38 @@ const DELIVERY_OPTIONS = [
   'DELIVERED',
 ]
 
+const DASHBOARD_VIEWS = new Set([
+  'dashboard',
+  'orders',
+  'payments',
+  'feedback',
+  'analytics',
+  'customers',
+  'profile',
+  'settings',
+])
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function normalizeView(value, fallback = 'dashboard') {
+  const key = String(value || '').toLowerCase().trim()
+  if (DASHBOARD_VIEWS.has(key)) return key
+  return fallback
+}
+
 function shortId(id) {
   const s = String(id || '')
-  if (s.length <= 8) return s
-  return `${s.slice(0, 8)}…`
-}
-
-function trustLabel(score) {
-  const n = Number(score || 0)
-  if (n >= 71) return 'High'
-  if (n >= 40) return 'Medium'
-  return 'Low'
-}
-
-function trustTone(score) {
-  const n = Number(score || 0)
-  if (n >= 71) return 'good'
-  if (n >= 40) return 'warn'
-  return 'bad'
-}
-
-function trustBadgeClass(score) {
-  const n = Number(score || 0)
-  if (n >= 71) return 'badge badge--trusted'
-  if (n >= 40) return 'badge badge--medium'
-  return 'badge badge--risky'
-}
-
-function pillClass(kind) {
-  const normalized = String(kind || '').toUpperCase()
-  if (normalized === 'PAID') return 'statusPill paid'
-  if (normalized === 'PENDING') return 'statusPill pending'
-  if (normalized === 'DELIVERED') return 'statusPill delivered'
-  if (
-    normalized === 'DISPATCHED' ||
-    normalized === 'IN_TRANSIT' ||
-    normalized === 'OUT_FOR_DELIVERY' ||
-    normalized === 'IN_CUSTOMS' ||
-    normalized === 'OUT_OF_CUSTOMS'
-  ) {
-    return 'statusPill info'
-  }
-  return 'statusPill'
-}
-
-function feedbackTagClass(tag) {
-  if (tag === 'AI Verified') return 'pill pill--ai'
-  if (tag === 'Blockchain Anchored' || tag === 'Blockchain Verified') return 'pill pill--blockchain'
-  if (tag === 'Payment Verified') return 'pill pill--payment'
-  if (tag === 'Delivered') return 'pill pill--delivered'
-  return 'pill'
+  if (s.length <= 10) return s
+  return `${s.slice(0, 10)}...`
 }
 
 function formatDate(iso) {
-  if (!iso) return '—'
+  if (!iso) return 'N/A'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return 'N/A'
   return d.toLocaleDateString()
-}
-
-function formatScore(n, digits = 3) {
-  const v = Number(n)
-  if (Number.isNaN(v)) return '—'
-  return v.toFixed(digits)
 }
 
 function formatLocationText(location) {
@@ -86,10 +78,6 @@ function formatLocationText(location) {
   return parts.length ? parts.join(', ') : 'Location unavailable'
 }
 
-function formatOrderActionLocation(location, label) {
-  return `${label}: ${formatLocationText(location)}`
-}
-
 function formatFeedbackLocation(feedback) {
   return formatLocationText({
     city: feedback?.ipCity,
@@ -98,41 +86,118 @@ function formatFeedbackLocation(feedback) {
   })
 }
 
-function TrustScoreDial({ score }) {
-  const n = Number(score)
-  const safe = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0
-  const tone = trustTone(safe)
+function feedbackTone(score) {
+  const n = normalizeScore(score)
+  if (n >= 70) return 'good'
+  if (n >= 40) return 'warn'
+  return 'danger'
+}
 
+function feedbackTagTone(tag) {
+  if (tag === 'AI Verified') return 'good'
+  if (tag === 'Blockchain Anchored' || tag === 'Blockchain Verified') return 'info'
+  if (tag === 'Payment Verified' || tag === 'Verified') return 'good'
+  if (tag === 'Delivered') return 'neutral'
+  return 'neutral'
+}
+
+function applyWorkspaceTheme(isDarkMode) {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return
+  const theme = isDarkMode ? 'dark' : 'light'
+  document.body.dataset.theme = theme
+  window.localStorage.setItem('trusty-theme', theme)
+  window.dispatchEvent(new CustomEvent('trusty-theme-change', { detail: { theme } }))
+}
+
+function FeedbackSection({ feedbacks }) {
   return (
-    <div className={`trustDial trustDial--${tone}`} style={{ '--progress': `${safe}%` }}>
-      <div className="trustDialInner">
-        <div className="trustDialValue">{safe}</div>
-        <div className="trustDialLabel">out of 100</div>
+    <section className="vdSection">
+      <div className="vdSectionHead">
+        <h2>Customer Feedback</h2>
+        <p>Read-only feed with trust labels, risk metadata, and explainability traces.</p>
       </div>
-    </div>
+
+      {feedbacks.length === 0 ? <div className="vdTableEmpty">No feedback submitted yet.</div> : null}
+
+      <div className="vdFeedbackList">
+        {feedbacks.map((feedback) => (
+          <article className="vdFeedbackCard" key={feedback._id}>
+            <div className="vdFeedbackScore">
+              <strong>{normalizeScore(feedback.trustScore)}</strong>
+              <span>{trustLabel(feedback.trustScore)}</span>
+            </div>
+
+            <div className="vdFeedbackBody">
+              <div className="vdFeedbackMeta">
+                <span className={`vdTone vdTone--${feedbackTone(feedback.trustScore)}`}>{feedback.trustLevel || trustLabel(feedback.trustScore)}</span>
+                <span className={feedback.codeValid ? 'vdTone vdTone--good' : 'vdTone vdTone--neutral'}>{feedback.codeValid ? 'Verified' : 'Anonymous'}</span>
+                {feedback.blockchain?.txRef ? <span className="vdTone vdTone--info">Blockchain Anchored</span> : null}
+                {(feedback.tags || [])
+                  .filter((tag) => tag !== 'Blockchain Anchored' && tag !== 'Verified')
+                  .slice(0, 5)
+                  .map((tag) => (
+                    <span className={`vdTone vdTone--${feedbackTagTone(tag)}`} key={`${feedback._id}-${tag}`}>
+                      {tag}
+                    </span>
+                  ))}
+              </div>
+
+              <p className="vdFeedbackText">{feedback.text}</p>
+
+              <div className="vdFeedbackDetails">
+                <span>Location: {formatFeedbackLocation(feedback)}</span>
+                <span>Risk: {feedback.ipRiskLevel || 'UNKNOWN'}</span>
+                <span>Date: {formatDate(feedback.createdAt)}</span>
+                <span>
+                  Blockchain: {feedback.blockchain?.txRef ? `${String(feedback.blockchain.txRef).slice(0, 12)}...` : 'N/A'}
+                </span>
+              </div>
+
+              <FeedbackExplanation feedback={feedback} buttonLabel="Why this score and tags?" />
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   )
 }
 
-export function VendorDashboard({ defaultVendorId }) {
-  const [sessionState, setSessionState] = useState(() => getSession())
-  const isAuthedVendor =
-    Boolean(sessionState?.token) && sessionState?.user?.role === 'VENDOR' && Boolean(sessionState?.user?.vendorId)
+export function VendorDashboard({ initialView = 'dashboard' }) {
+  const navigate = useNavigate()
+  const location = useLocation()
 
+  const [sessionState, setSessionState] = useState(() => getSession())
   const vendorId = sessionState?.user?.vendorId || ''
+  const [onboardingMessage, setOnboardingMessage] = useState(() => String(location.state?.onboardingMessage || ''))
+
+  const routeDefaultView = location.pathname.startsWith('/vendor/analytics')
+    ? 'analytics'
+    : normalizeView(initialView)
+
+  const [activeView, setActiveView] = useState(() => {
+    const queryView = new URLSearchParams(location.search).get('view')
+    return normalizeView(queryView || routeDefaultView, routeDefaultView)
+  })
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(max-width: 1023px)').matches
+  })
 
   const [overview, setOverview] = useState(null)
   const [orders, setOrders] = useState([])
   const [feedbacks, setFeedbacks] = useState([])
+  const [vendorProfile, setVendorProfile] = useState(null)
+  const [vendorSettings, setVendorSettings] = useState(null)
 
-  const [tab, setTab] = useState('orders')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
 
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createResult, setCreateResult] = useState(null)
+  const [selectedFeedback, setSelectedFeedback] = useState(null)
   const [createForm, setCreateForm] = useState({
     customerName: '',
     email: '',
@@ -143,20 +208,125 @@ export function VendorDashboard({ defaultVendorId }) {
     price: '',
   })
 
-  async function refresh() {
+  useEffect(() => {
+    const messageFromState = location.state?.onboardingMessage
+    if (!messageFromState) return
+    setOnboardingMessage(String(messageFromState))
+    navigate(location.pathname + location.search, { replace: true, state: {} })
+  }, [location.pathname, location.search, location.state?.onboardingMessage, navigate])
+
+  useEffect(() => {
+    const queryView = new URLSearchParams(location.search).get('view')
+    const fallback = location.pathname.startsWith('/vendor/analytics') ? 'analytics' : routeDefaultView
+    setActiveView(normalizeView(queryView || fallback, fallback))
+  }, [location.pathname, location.search, routeDefaultView])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const media = window.matchMedia('(max-width: 1023px)')
+    const handleChange = (event) => {
+      const nextMatches = Boolean(event.matches)
+      setIsMobileViewport(nextMatches)
+      if (!nextMatches) setSidebarMobileOpen(false)
+    }
+
+    setIsMobileViewport(media.matches)
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', handleChange)
+      return () => media.removeEventListener('change', handleChange)
+    }
+
+    media.addListener(handleChange)
+    return () => media.removeListener(handleChange)
+  }, [])
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      document.body.classList.remove('vd-sidebar-open')
+      return undefined
+    }
+
+    if (sidebarMobileOpen) document.body.classList.add('vd-sidebar-open')
+    else document.body.classList.remove('vd-sidebar-open')
+
+    return () => {
+      document.body.classList.remove('vd-sidebar-open')
+    }
+  }, [isMobileViewport, sidebarMobileOpen])
+
+  useEffect(() => {
+    if (!sidebarMobileOpen) return undefined
+
+    const handleEsc = (event) => {
+      if (event.key === 'Escape') setSidebarMobileOpen(false)
+    }
+
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [sidebarMobileOpen])
+
+  async function refresh(options = {}) {
+    const allowAuthRetry = options.allowAuthRetry !== false
     if (!vendorId) return
+
     try {
       setLoading(true)
       setError('')
-      const [o, ord, fb] = await Promise.all([
-        apiGet(`/api/vendor/${vendorId}/overview`),
-        apiGet(`/api/vendor/${vendorId}/orders`),
-        apiGet(`/api/vendor/${vendorId}/feedbacks`),
-      ])
-      setOverview(o.overview)
-      setOrders(ord.orders || [])
-      setFeedbacks(fb.feedbacks || [])
+
+      let dashboardData = null
+      try {
+        dashboardData = await apiGet(`/api/vendor/${vendorId}/dashboard-bootstrap`)
+      } catch (bootstrapErr) {
+        if (bootstrapErr?.status !== 404) throw bootstrapErr
+
+        try {
+          const [overviewData, ordersData, feedbackData] = await Promise.all([
+            apiGet(`/api/vendor/${vendorId}/overview`),
+            apiGet(`/api/vendor/${vendorId}/orders`),
+            apiGet(`/api/vendor/${vendorId}/feedbacks`),
+          ])
+
+          dashboardData = {
+            overview: overviewData?.overview || null,
+            orders: ordersData?.orders || [],
+            feedbacks: feedbackData?.feedbacks || [],
+          }
+        } catch (fallbackErr) {
+          if (fallbackErr?.status === 404) {
+            const staleSessionError = new Error('Your vendor session is out of date. Please sign in again.')
+            staleSessionError.status = 404
+            staleSessionError.code = 'VENDOR_SESSION_STALE'
+            throw staleSessionError
+          }
+          throw fallbackErr
+        }
+      }
+
+      setOverview(dashboardData?.overview || null)
+      setOrders(dashboardData?.orders || [])
+      setFeedbacks(dashboardData?.feedbacks || [])
+      setVendorProfile(dashboardData?.profile || null)
+      setVendorSettings(dashboardData?.settings || null)
     } catch (e) {
+      if (e?.status === 401 || e?.status === 403) {
+        const liveSession = getSession()
+        const sameVendorSession = String(liveSession?.user?.vendorId || '') === String(vendorId)
+
+        if (allowAuthRetry && liveSession?.token && sameVendorSession) {
+          await sleep(180)
+          await refresh({ allowAuthRetry: false })
+          return
+        }
+
+        onLogout()
+        return
+      }
+      if (e?.status === 404 && e?.code === 'VENDOR_SESSION_STALE') {
+        onLogout('Your dashboard session expired after data reset. Please log in again.')
+        return
+      }
       setError(e?.message || 'Failed to load vendor dashboard')
     } finally {
       setLoading(false)
@@ -164,35 +334,33 @@ export function VendorDashboard({ defaultVendorId }) {
   }
 
   useEffect(() => {
-    if (!isAuthedVendor) return
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthedVendor])
+  }, [vendorId])
 
-  async function onLogin(e) {
-    e.preventDefault()
-    try {
-      setError('')
-      const data = await apiPost('/api/auth/login', loginForm)
-      setSession({ token: data.token, user: data.user })
-      setSessionState({ token: data.token, user: data.user })
-    } catch (e2) {
-      setError(e2?.message || 'Login failed')
-    }
-  }
+  useEffect(() => {
+    if (!vendorSettings?.system || typeof vendorSettings.system.darkMode !== 'boolean') return
+    applyWorkspaceTheme(vendorSettings.system.darkMode)
+  }, [vendorSettings?.system?.darkMode])
 
-  function onLogout() {
+  function onLogout(sessionMessage = '') {
+    setSidebarMobileOpen(false)
     clearSession()
     setSessionState(null)
     setOverview(null)
     setOrders([])
     setFeedbacks([])
+    setVendorProfile(null)
+    setVendorSettings(null)
     setCreateOpen(false)
     setCreateResult(null)
+    setSelectedFeedback(null)
+    const state = sessionMessage ? { sessionMessage } : undefined
+    navigate('/vendor/login', { replace: true, state })
   }
 
-  async function onCreateOrder(e) {
-    e.preventDefault()
+  async function onCreateOrder(event) {
+    event.preventDefault()
     if (!vendorId) return
 
     try {
@@ -202,7 +370,7 @@ export function VendorDashboard({ defaultVendorId }) {
 
       const productDetails = [createForm.productName?.trim(), createForm.productDetails?.trim()]
         .filter(Boolean)
-        .join(' — ')
+        .join(' - ')
 
       const payload = {
         customerName: createForm.customerName,
@@ -226,8 +394,8 @@ export function VendorDashboard({ defaultVendorId }) {
         price: '',
       })
       await refresh()
-    } catch (e2) {
-      setError(e2?.message || 'Order creation failed')
+    } catch (e) {
+      setError(e?.message || 'Order creation failed')
     } finally {
       setCreating(false)
     }
@@ -235,397 +403,494 @@ export function VendorDashboard({ defaultVendorId }) {
 
   async function onConfirmPayment(orderId) {
     if (!vendorId) return
-    await apiPost(`/api/vendor/${vendorId}/orders/${orderId}/confirm-payment`, {})
-    await refresh()
+    try {
+      setError('')
+      await apiPost(`/api/vendor/${vendorId}/orders/${orderId}/confirm-payment`, {})
+      await refresh()
+    } catch (e) {
+      setError(e?.message || 'Failed to confirm payment')
+    }
   }
 
   async function onUpdateDelivery(orderId, status, trackingRef) {
     if (!vendorId) return
-    await apiPost(`/api/vendor/${vendorId}/orders/${orderId}/delivery-status`, {
-      status,
-      trackingRef,
-      shareTracking: false,
-    })
-    await refresh()
+    try {
+      setError('')
+      await apiPost(`/api/vendor/${vendorId}/orders/${orderId}/delivery-status`, {
+        status,
+        trackingRef,
+        shareTracking: false,
+      })
+      await refresh()
+    } catch (e) {
+      setError(e?.message || 'Failed to update delivery status')
+      throw e
+    }
   }
 
   const pendingPayments = useMemo(() => {
-    return (orders || []).filter((o) => o.paymentStatus === 'PENDING')
+    return (orders || []).filter((order) => String(order.paymentStatus || '').toUpperCase() === 'PENDING')
   }, [orders])
 
-  if (!isAuthedVendor) {
+  const feedbackByOrderId = useMemo(() => mapFeedbackByOrderId(feedbacks), [feedbacks])
+
+  const trustTrend = useMemo(() => buildTrustTrend(feedbacks), [feedbacks])
+  const feedbackDistribution = useMemo(() => buildFeedbackDistribution(feedbacks), [feedbacks])
+  const ordersVsFeedback = useMemo(() => buildOrdersVsFeedback(orders, feedbacks), [orders, feedbacks])
+
+  const quickInsights = useMemo(() => {
+    return buildQuickInsights({
+      orders,
+      feedbacks,
+      averageTrustScore: overview?.averageTrustScore,
+    })
+  }, [orders, feedbacks, overview?.averageTrustScore])
+
+  const alerts = useMemo(() => buildAlerts(feedbacks), [feedbacks])
+  const customers = useMemo(() => buildCustomerInsights(orders, feedbacks), [orders, feedbacks])
+
+  async function handleMarkDelivered(order) {
+    try {
+      await onUpdateDelivery(order._id, 'DELIVERED', order?.deliveryHistory?.at(-1)?.trackingRef || '')
+    } catch {
+      // Error state already managed in onUpdateDelivery.
+    }
+  }
+
+  async function handleAddTracking(order) {
+    const trackingRef = window.prompt('Enter tracking reference', order?.deliveryHistory?.at(-1)?.trackingRef || '')
+    if (trackingRef === null) return
+
+    const status = String(order?.deliveryStatus || 'DISPATCHED').toUpperCase()
+
+    try {
+      await onUpdateDelivery(order._id, status, trackingRef)
+    } catch {
+      // Error state already managed in onUpdateDelivery.
+    }
+  }
+
+  async function handleUpdateOrder(order) {
+    const statusInput = window.prompt(
+      `Delivery status (${DELIVERY_OPTIONS.join(', ')})`,
+      String(order?.deliveryStatus || 'DISPATCHED'),
+    )
+    if (statusInput === null) return
+
+    const status = String(statusInput).trim().toUpperCase()
+    if (!DELIVERY_OPTIONS.includes(status)) {
+      setError(`Invalid status. Use one of: ${DELIVERY_OPTIONS.join(', ')}`)
+      return
+    }
+
+    const trackingInput = window.prompt('Tracking reference (optional)', order?.deliveryHistory?.at(-1)?.trackingRef || '')
+    if (trackingInput === null) return
+
+    try {
+      await onUpdateDelivery(order._id, status, trackingInput)
+    } catch {
+      // Error state already managed in onUpdateDelivery.
+    }
+  }
+
+  function handleViewFeedback(order) {
+    const feedback = feedbackByOrderId.get(String(order?._id))
+    if (!feedback) {
+      setError('No feedback linked to this order yet.')
+      return
+    }
+    setSelectedFeedback(feedback)
+  }
+
+  function handleSidebarSelect(item) {
+    const normalized = normalizeView(item)
+    setError('')
+    setActiveView(normalized)
+    setSidebarMobileOpen(false)
+
+    navigate(`/vendor/dashboard?view=${normalized}`)
+  }
+
+  function handleProfileSaved(nextProfile, nextUser) {
+    if (nextProfile) {
+      setVendorProfile(nextProfile)
+    }
+
+    if (nextUser) {
+      setSessionState((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          user: {
+            ...prev.user,
+            ...nextUser,
+            vendorName: nextUser.vendorName || nextProfile?.businessName || prev?.user?.vendorName,
+          },
+        }
+      })
+    }
+  }
+
+  function handleSettingsSaved(nextSettings) {
+    if (nextSettings) setVendorSettings(nextSettings)
+  }
+
+  function renderBootLoader() {
     return (
-      <div className="list">
-        <section className="card">
-          <div className="cardTitle">Vendor Login</div>
-          <div className="muted">Public is free; vendor dashboard requires login.</div>
-          <div style={{ height: 10 }} />
-          {error ? <div className="alert error">{error}</div> : null}
-          <form onSubmit={onLogin} className="list">
-            <div className="field">
-              <label>Email</label>
-              <input
-                className="input"
-                value={loginForm.email}
-                onChange={(e) => setLoginForm((s) => ({ ...s, email: e.target.value }))}
-                placeholder="vendor.tech@trustlens.local"
-              />
-            </div>
-            <div className="field">
-              <label>Password</label>
-              <input
-                type="password"
-                className="input"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm((s) => ({ ...s, password: e.target.value }))}
-                placeholder="Vendor123"
-              />
-            </div>
-            <button className="btn" type="submit">Login</button>
-          </form>
-          <div style={{ height: 10 }} />
-          <div className="muted">Demo credentials (after running seed): vendor.tech@trustlens.local / Vendor123</div>
-        </section>
-      </div>
+      <section className="vdBootLoader" role="status" aria-live="polite" aria-label="Loading vendor dashboard">
+        <div className="vdBootSpinner" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <h2>Loading your vendor workspace</h2>
+        <p>Preparing dashboard cards, orders, feedback insights, and trust analytics.</p>
+
+        <div className="vdSkeletonGrid" aria-hidden="true">
+          <div className="vdSkeleton" />
+          <div className="vdSkeleton" />
+          <div className="vdSkeleton" />
+        </div>
+      </section>
     )
   }
 
+  function renderActiveView() {
+    if (activeView === 'dashboard') {
+      return (
+        <>
+          <DashboardCards overview={overview} />
+          <InsightsPanel insights={quickInsights} />
+          <ChartsSection
+            title="Performance Snapshot"
+            subtitle="Track trust trends, review distribution, and order-feedback balance."
+            trustTrend={trustTrend}
+            feedbackDistribution={feedbackDistribution}
+            ordersVsFeedback={ordersVsFeedback}
+          />
+          <AlertsPanel alerts={alerts} />
+          <OrdersTable
+            title="Recent Orders"
+            subtitle="Search, sort, filter, and take action from one table."
+            orders={orders}
+            loading={loading}
+            feedbackByOrderId={feedbackByOrderId}
+            onConfirmPayment={onConfirmPayment}
+            onMarkDelivered={handleMarkDelivered}
+            onAddTracking={handleAddTracking}
+            onViewFeedback={handleViewFeedback}
+            onUpdateOrder={handleUpdateOrder}
+          />
+        </>
+      )
+    }
+
+    if (activeView === 'orders') {
+      return (
+        <OrdersTable
+          title="Orders and Delivery"
+          subtitle="Delivery flow management with actionable operations."
+          orders={orders}
+          loading={loading}
+          feedbackByOrderId={feedbackByOrderId}
+          onConfirmPayment={onConfirmPayment}
+          onMarkDelivered={handleMarkDelivered}
+          onAddTracking={handleAddTracking}
+          onViewFeedback={handleViewFeedback}
+          onUpdateOrder={handleUpdateOrder}
+        />
+      )
+    }
+
+    if (activeView === 'payments') {
+      return (
+        <OrdersTable
+          title="Payments"
+          subtitle={`${pendingPayments.length} pending payment${pendingPayments.length === 1 ? '' : 's'} requiring confirmation.`}
+          orders={orders}
+          loading={loading}
+          feedbackByOrderId={feedbackByOrderId}
+          initialFilter="payment-pending"
+          onConfirmPayment={onConfirmPayment}
+          onMarkDelivered={handleMarkDelivered}
+          onAddTracking={handleAddTracking}
+          onViewFeedback={handleViewFeedback}
+          onUpdateOrder={handleUpdateOrder}
+        />
+      )
+    }
+
+    if (activeView === 'feedback') {
+      return <FeedbackSection feedbacks={feedbacks} />
+    }
+
+    if (activeView === 'analytics') {
+      return (
+        <AnalyticsPage
+          overview={overview}
+          orders={orders}
+          feedbacks={feedbacks}
+          customers={customers}
+        />
+      )
+    }
+
+    if (activeView === 'customers') {
+      return (
+        <>
+          <CustomerInsights customers={customers} />
+          <AlertsPanel alerts={alerts} />
+        </>
+      )
+    }
+
+    if (activeView === 'profile') {
+      return (
+        <ProfilePage
+          vendorId={vendorId}
+          initialProfile={vendorProfile}
+          overviewTrustScore={overview?.averageTrustScore}
+          onProfileSaved={handleProfileSaved}
+        />
+      )
+    }
+
+    if (activeView === 'settings') {
+      return (
+        <SettingsPage
+          vendorId={vendorId}
+          initialSettings={vendorSettings}
+          onSettingsSaved={handleSettingsSaved}
+        />
+      )
+    }
+
+    return null
+  }
+
   return (
-    <div className="list">
-      <section className="card">
-        <div className="vendorHeader">
-          <div>
-            <div className="vendorTitle">{sessionState?.user?.vendorName || 'Vendor'}</div>
-            <div className="muted">Vendor Dashboard</div>
+    <div className={sidebarMobileOpen ? 'vdShell vdShell--sidebar-open' : 'vdShell'}>
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((prev) => !prev)}
+        activeItem={activeView}
+        onSelect={handleSidebarSelect}
+        onLogout={onLogout}
+        mobileOpen={sidebarMobileOpen}
+        onMobileClose={() => setSidebarMobileOpen(false)}
+      />
+
+      <button
+        type="button"
+        className={sidebarMobileOpen ? 'vdSidebarScrim is-visible' : 'vdSidebarScrim'}
+        aria-label="Close sidebar"
+        onClick={() => setSidebarMobileOpen(false)}
+      />
+
+      <div className="vdWorkspace">
+        {onboardingMessage ? <div className="vdInlineNotice">{onboardingMessage}</div> : null}
+
+        <header className="vdTopBar">
+          <div className="vdTopHeading">
+            <button
+              className="vdMobileMenuButton"
+              type="button"
+              aria-label="Open sidebar menu"
+              aria-controls="vendor-sidebar"
+              aria-expanded={sidebarMobileOpen}
+              onClick={() => setSidebarMobileOpen(true)}
+            >
+              ☰
+            </button>
+
+            <div>
+              <h1>{sessionState?.user?.vendorName || 'Vendor Workspace'}</h1>
+              <p>Operational dashboard for trust, fulfillment, feedback, and analytics.</p>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="btn secondary" type="button" onClick={onLogout}>Logout</button>
-            <button className="btn" type="button" onClick={() => setCreateOpen(true)}>+ Create Order</button>
+
+          <div className="vdTopActions">
+            <button className="btn secondary" type="button" onClick={refresh}>
+              Refresh
+            </button>
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={() => navigate(activeView === 'analytics' ? '/vendor/dashboard?view=dashboard' : '/vendor/dashboard?view=analytics')}
+            >
+              {activeView === 'analytics' ? 'Go to Dashboard' : 'Go to Analytics'}
+            </button>
+            <button className="btn" type="button" onClick={() => setCreateOpen(true)}>
+              + Create Order
+            </button>
           </div>
-        </div>
+        </header>
 
         {error ? <div className="alert error">{error}</div> : null}
-        {loading ? <div className="muted">Loading…</div> : null}
 
-        <div style={{ height: 10 }} />
+  {loading && !overview ? renderBootLoader() : null}
+        {!loading || overview ? <div className="vdContent">{renderActiveView()}</div> : null}
 
-        <div className="metricsGrid">
-          <div className="statCard metricCard metricCard--orders">
-            <div className="statHead">
-              <span className="statIcon">OR</span>
-              <div className="statLabel">Total Orders</div>
+        {createResult ? (
+          <section className="vdSection">
+            <div className="vdSectionHead">
+              <h2>Latest Order Created</h2>
+              <p>Invoice and verification metadata for the most recent successful order.</p>
             </div>
-            <div className="statValue">{overview?.totalOrders ?? '—'}</div>
-          </div>
-          <div className="statCard metricCard metricCard--payments">
-            <div className="statHead">
-              <span className="statIcon">PY</span>
-              <div className="statLabel">Pending Payments</div>
-            </div>
-            <div className="statValue">{overview?.pendingPayments ?? '—'}</div>
-          </div>
-          <div className="statCard metricCard metricCard--delivered">
-            <div className="statHead">
-              <span className="statIcon">DL</span>
-              <div className="statLabel">Delivered Orders</div>
-            </div>
-            <div className="statValue">{overview?.deliveredOrders ?? '—'}</div>
-          </div>
-          <div className="statCard metricCard metricCard--trust">
-            <div className="statHead">
-              <span className="statIcon">TS</span>
-              <div className="statLabel">Trust Score</div>
-            </div>
-            <div className="trustDialWrap">
-              <TrustScoreDial score={overview?.averageTrustScore} />
-            </div>
-            <div className={trustBadgeClass(overview?.averageTrustScore)}>{trustLabel(overview?.averageTrustScore)} Confidence</div>
-          </div>
-          <div className="statCard metricCard metricCard--feedback">
-            <div className="statHead">
-              <span className="statIcon">FB</span>
-              <div className="statLabel">Total Feedback</div>
-            </div>
-            <div className="statValue">{overview?.totalFeedbackCount ?? '—'}</div>
-          </div>
-        </div>
 
-        <div style={{ height: 14 }} />
-
-        <div className="tabs">
-          <button className={tab === 'orders' ? 'tab active' : 'tab'} type="button" onClick={() => setTab('orders')}>
-            Orders & Delivery
-          </button>
-          <button className={tab === 'payments' ? 'tab active' : 'tab'} type="button" onClick={() => setTab('payments')}>
-            Payments
-            <span className="tabBadge">{pendingPayments.length}</span>
-          </button>
-          <button className={tab === 'feedback' ? 'tab active' : 'tab'} type="button" onClick={() => setTab('feedback')}>
-            Feedback
-            <span className="tabBadge">{feedbacks.length}</span>
-          </button>
-        </div>
-
-        <div style={{ height: 12 }} />
-
-        {tab === 'orders' ? (
-          <div className="card">
-            <div className="cardTitle">Orders</div>
-            <div className="tableWrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Order ID</th>
-                    <th>Customer</th>
-                    <th>Product</th>
-                    <th>Price</th>
-                    <th>Payment</th>
-                    <th>Delivery</th>
-                    <th>Feedback Code</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((o) => (
-                    <OrderRow key={o._id} order={o} onUpdateDelivery={onUpdateDelivery} />
-                  ))}
-                </tbody>
-              </table>
+            <div className="vdResultGrid">
+              <div>
+                <span>Invoice</span>
+                <strong>{createResult.invoice?.invoiceNumber || 'N/A'}</strong>
+              </div>
+              <div>
+                <span>Feedback Code</span>
+                <strong>{createResult.order?.feedbackCode || 'N/A'}</strong>
+              </div>
+              <div>
+                <span>Order ID</span>
+                <strong>{shortId(createResult.order?._id)}</strong>
+              </div>
+              <div>
+                <span>Order Location</span>
+                <strong>{formatLocationText(createResult.order?.createdLocation)}</strong>
+              </div>
             </div>
-          </div>
+          </section>
         ) : null}
-
-        {tab === 'payments' ? (
-          <div className="card">
-            <div className="cardTitle">Payments</div>
-            <div className="muted">Confirm payments for pending orders (demo).</div>
-            <div style={{ height: 10 }} />
-            <div className="tableWrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Order ID</th>
-                    <th>Customer</th>
-                    <th>Product</th>
-                    <th>Price</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingPayments.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="muted">No pending payments.</td>
-                    </tr>
-                  ) : (
-                    pendingPayments.map((o) => (
-                      <tr key={o._id}>
-                        <td>{shortId(o._id)}</td>
-                        <td>
-                          <div><b>{o.customerName}</b></div>
-                          <div className="muted">{o.email}</div>
-                          <div className="muted">{formatOrderActionLocation(o.createdLocation, 'Order')}</div>
-                        </td>
-                        <td><b>{o.productDetails}</b></td>
-                        <td>₹{o.price}</td>
-                        <td>
-                          <div><span className={pillClass(o.paymentStatus)}>{o.paymentStatus}</span></div>
-                          <div className="muted">{formatOrderActionLocation(o.paymentLocation, 'Payment')}</div>
-                        </td>
-                        <td>
-                          <button className="btn" type="button" onClick={() => onConfirmPayment(o._id)}>
-                            Confirm
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : null}
-
-        {tab === 'feedback' ? (
-          <div className="card">
-            <div className="cardTitle">Customer Feedback ({feedbacks.length})</div>
-            <div className="muted">Read-only: vendors cannot edit/delete feedback.</div>
-            <div style={{ height: 10 }} />
-            <div className="list">
-              {feedbacks.length === 0 ? <div className="muted">No feedbacks yet.</div> : null}
-              {feedbacks.map((f) => (
-                <div key={f._id} className="card reviewCard">
-                  <div className="feedbackRow">
-                    <div className="feedbackScore">
-                      <div className="feedbackScoreValue">{f.trustScore}</div>
-                      <div className="muted">{trustLabel(f.trustScore)} Trust</div>
-                    </div>
-                    <div className="feedbackBody">
-                      <div className="pillRow" style={{ marginBottom: 8 }}>
-                        <span className={trustBadgeClass(f.trustScore)}>{f.trustLevel}</span>
-                        <span className={f.codeValid ? 'pill pill--payment' : 'pill'}>{f.codeValid ? 'Verified' : 'Anonymous'}</span>
-                        {f.blockchain?.txRef ? <span className="pill pill--blockchain">Blockchain Anchored</span> : null}
-                        {(f.tags || []).filter((t) => t !== 'Blockchain Anchored' && t !== 'Verified').slice(0, 6).map((t) => (
-                          <span key={t} className={feedbackTagClass(t)}>{t}</span>
-                        ))}
-                      </div>
-                      <div>{f.text}</div>
-                      <div style={{ height: 8 }} />
-                      <div className="muted">
-                        Location: {formatFeedbackLocation(f)} · Risk: {f.ipRiskLevel || 'UNKNOWN'}
-                      </div>
-                      <div style={{ height: 6 }} />
-                      <div className="muted">
-                        DupAdj: {f.dupAdj ?? 0} · MaxSim: {formatScore(f.embeddingAudit?.maxSim)}
-                        {f.embeddingAudit?.modelVersion ? ` · ${f.embeddingAudit.modelVersion}` : ''}
-                      </div>
-                      <div style={{ height: 6 }} />
-                      <div className="muted">
-                        {formatDate(f.createdAt)} · {f.blockchain?.txRef ? `${String(f.blockchain.txRef).slice(0, 12)}…` : '—'}
-                      </div>
-                      <FeedbackExplanation feedback={f} buttonLabel="Why this score and tags?" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </section>
+      </div>
 
       {createOpen ? (
         <div className="modalOverlay" role="presentation" onClick={() => setCreateOpen(false)}>
-          <div className="modalCard" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+          <div className="modalCard vdModalCard" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
             <div className="modalHeader">
               <div>
                 <div className="cardTitle" style={{ marginBottom: 0 }}>Create New Order</div>
-                <div className="muted">Generates invoice + feedback code.</div>
+                <div className="muted">Generate invoice and feedback code in one flow.</div>
               </div>
-              <button className="btn secondary" type="button" onClick={() => setCreateOpen(false)}>×</button>
+              <button className="btn secondary" type="button" onClick={() => setCreateOpen(false)}>Close</button>
             </div>
 
             <div style={{ height: 10 }} />
+
             <form onSubmit={onCreateOrder} className="list">
               <div className="row">
                 <div className="field">
                   <label>Customer Name *</label>
-                  <input className="input" value={createForm.customerName} onChange={(e) => setCreateForm((s) => ({ ...s, customerName: e.target.value }))} />
+                  <input
+                    className="input"
+                    value={createForm.customerName}
+                    onChange={(event) => setCreateForm((state) => ({ ...state, customerName: event.target.value }))}
+                    required
+                  />
                 </div>
                 <div className="field">
                   <label>Customer Email *</label>
-                  <input className="input" value={createForm.email} onChange={(e) => setCreateForm((s) => ({ ...s, email: e.target.value }))} />
+                  <input
+                    className="input"
+                    value={createForm.email}
+                    onChange={(event) => setCreateForm((state) => ({ ...state, email: event.target.value }))}
+                    required
+                  />
                 </div>
               </div>
+
               <div className="row">
                 <div className="field">
                   <label>Phone *</label>
-                  <input className="input" value={createForm.phone} onChange={(e) => setCreateForm((s) => ({ ...s, phone: e.target.value }))} />
+                  <input
+                    className="input"
+                    value={createForm.phone}
+                    onChange={(event) => setCreateForm((state) => ({ ...state, phone: event.target.value }))}
+                    required
+                  />
                 </div>
                 <div className="field">
-                  <label>Price (₹) *</label>
-                  <input className="input" type="number" value={createForm.price} onChange={(e) => setCreateForm((s) => ({ ...s, price: e.target.value }))} />
+                  <label>Price (INR) *</label>
+                  <input
+                    className="input"
+                    type="number"
+                    value={createForm.price}
+                    onChange={(event) => setCreateForm((state) => ({ ...state, price: event.target.value }))}
+                    required
+                  />
                 </div>
               </div>
+
               <div className="field">
                 <label>Address *</label>
-                <input className="input" value={createForm.address} onChange={(e) => setCreateForm((s) => ({ ...s, address: e.target.value }))} />
+                <input
+                  className="input"
+                  value={createForm.address}
+                  onChange={(event) => setCreateForm((state) => ({ ...state, address: event.target.value }))}
+                  required
+                />
               </div>
+
               <div className="field">
                 <label>Product Name *</label>
-                <input className="input" value={createForm.productName} onChange={(e) => setCreateForm((s) => ({ ...s, productName: e.target.value }))} />
+                <input
+                  className="input"
+                  value={createForm.productName}
+                  onChange={(event) => setCreateForm((state) => ({ ...state, productName: event.target.value }))}
+                  required
+                />
               </div>
+
               <div className="field">
                 <label>Product Details</label>
-                <textarea className="textarea" value={createForm.productDetails} onChange={(e) => setCreateForm((s) => ({ ...s, productDetails: e.target.value }))} />
+                <textarea
+                  className="textarea"
+                  value={createForm.productDetails}
+                  onChange={(event) => setCreateForm((state) => ({ ...state, productDetails: event.target.value }))}
+                />
               </div>
+
               <button className="btn" type="submit" disabled={creating}>
-                {creating ? 'Creating…' : 'Create Order & Generate Invoice'}
+                {creating ? 'Creating...' : 'Create Order and Generate Invoice'}
               </button>
             </form>
           </div>
         </div>
       ) : null}
 
-      {createResult ? (
-        <section className="card">
-          <div className="cardTitle">Latest Order Created</div>
-          <div className="kvs">
-            <div className="kv">
-              <div className="k">Invoice</div>
-              <div className="v">{createResult.invoice?.invoiceNumber || '—'}</div>
+      {selectedFeedback ? (
+        <div className="modalOverlay" role="presentation" onClick={() => setSelectedFeedback(null)}>
+          <div className="modalCard vdModalCard" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <div className="modalHeader">
+              <div>
+                <div className="cardTitle" style={{ marginBottom: 0 }}>Order Feedback</div>
+                <div className="muted">Linked trust and verification details.</div>
+              </div>
+              <button className="btn secondary" type="button" onClick={() => setSelectedFeedback(null)}>Close</button>
             </div>
-            <div className="kv">
-              <div className="k">Feedback Code</div>
-              <div className="v">{createResult.order?.feedbackCode || '—'}</div>
-            </div>
-            <div className="kv">
-              <div className="k">Order Location</div>
-              <div className="v">{formatLocationText(createResult.order?.createdLocation)}</div>
+
+            <div style={{ height: 10 }} />
+
+            <div className="vdFeedbackModal">
+              <div className="vdFeedbackMeta">
+                <span className={`vdTone vdTone--${feedbackTone(selectedFeedback.trustScore)}`}>
+                  Score: {normalizeScore(selectedFeedback.trustScore)}
+                </span>
+                <span className="vdTone vdTone--neutral">Level: {selectedFeedback.trustLevel || trustLabel(selectedFeedback.trustScore)}</span>
+                <span className={selectedFeedback.codeValid ? 'vdTone vdTone--good' : 'vdTone vdTone--neutral'}>
+                  {selectedFeedback.codeValid ? 'Verified' : 'Anonymous'}
+                </span>
+              </div>
+
+              <p className="vdFeedbackText">{selectedFeedback.text}</p>
+
+              <div className="vdFeedbackDetails">
+                <span>Location: {formatFeedbackLocation(selectedFeedback)}</span>
+                <span>Risk: {selectedFeedback.ipRiskLevel || 'UNKNOWN'}</span>
+                <span>Date: {formatDate(selectedFeedback.createdAt)}</span>
+              </div>
+
+              <FeedbackExplanation feedback={selectedFeedback} buttonLabel="Why this score and tags?" />
             </div>
           </div>
-          <div className="muted">Email is simulated (printed in backend console).</div>
-        </section>
-      ) : null}
-
-      {!vendorId && defaultVendorId ? (
-        <div className="muted">Default vendor: {defaultVendorId}</div>
+        </div>
       ) : null}
     </div>
-  )
-}
-
-function OrderRow({ order, onUpdateDelivery }) {
-  const [status, setStatus] = useState(order.deliveryStatus)
-  const [trackingRef, setTrackingRef] = useState(order.deliveryHistory?.at(-1)?.trackingRef || '')
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    setStatus(order.deliveryStatus)
-  }, [order.deliveryStatus])
-
-  async function submit() {
-    try {
-      setSaving(true)
-      await onUpdateDelivery(order._id, status, trackingRef)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <tr>
-      <td>{shortId(order._id)}</td>
-      <td>
-        <div><b>{order.customerName}</b></div>
-        <div className="muted">{order.email}</div>
-        <div className="muted">{formatOrderActionLocation(order.createdLocation, 'Order')}</div>
-      </td>
-      <td><b>{order.productDetails}</b></td>
-      <td>₹{order.price}</td>
-      <td>
-        <div><span className={pillClass(order.paymentStatus)}>{order.paymentStatus}</span></div>
-        <div className="muted">{formatOrderActionLocation(order.paymentLocation, 'Payment')}</div>
-      </td>
-      <td><span className={pillClass(order.deliveryStatus)}>{order.deliveryStatus}</span></td>
-      <td><span className="pill">{order.feedbackCode}</span></td>
-      <td>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
-            {DELIVERY_OPTIONS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <input
-            className="input"
-            value={trackingRef}
-            placeholder="Tracking ref (optional)"
-            onChange={(e) => setTrackingRef(e.target.value)}
-          />
-          <button className="btn secondary" type="button" disabled={saving} onClick={submit}>
-            {saving ? 'Updating…' : 'Update'}
-          </button>
-        </div>
-      </td>
-    </tr>
   )
 }

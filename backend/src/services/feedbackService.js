@@ -73,6 +73,43 @@ function computeCountryRelation({ order, payload, ipMeta }) {
     : 'MISMATCH';
 }
 
+function normalizeFeedbackRating(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const roundedHalf = Math.round(n * 2) / 2;
+  return clamp(roundedHalf, 1, 5);
+}
+
+function coerceBoolean(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+
+  const text = String(value || '').trim().toLowerCase();
+  if (text === 'true' || text === '1' || text === 'yes' || text === 'on') return true;
+  if (text === 'false' || text === '0' || text === 'no' || text === 'off') return false;
+
+  return fallback;
+}
+
+function normalizeOptionalText(value, maxLength) {
+  const text = String(value || '').trim();
+  if (!text) return undefined;
+  return text.slice(0, maxLength);
+}
+
+function normalizeServiceHighlights(rawHighlights = {}) {
+  const source =
+    rawHighlights && typeof rawHighlights === 'object' && !Array.isArray(rawHighlights)
+      ? rawHighlights
+      : {};
+
+  return {
+    response: coerceBoolean(source.response, false),
+    quality: coerceBoolean(source.quality, false),
+    delivery: coerceBoolean(source.delivery, false),
+  };
+}
+
 async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
   const vendor = await Vendor.findById(vendorId);
   if (!vendor) throw httpError(404, 'Vendor not found', 'VENDOR_NOT_FOUND');
@@ -119,6 +156,11 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
   }
 
   const notReceived = Boolean(payload?.notReceived);
+  const providedRating = normalizeFeedbackRating(payload?.rating);
+  const displayName = normalizeOptionalText(payload?.displayName, 80);
+  const displayCountry = normalizeOptionalText(payload?.displayCountry, 80);
+  const productName = normalizeOptionalText(payload?.productName, 140);
+  const serviceHighlights = normalizeServiceHighlights(payload?.serviceHighlights);
   // --- Fixed-weight trust model (0–100) ---
   // Core signals use fixed weights. IP is applied as a soft adjustment around a neutral baseline.
 
@@ -306,6 +348,10 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
 
   const finalTrustScore = clamp(Math.round(baseTrustScore + ipAdj + dupAdj + typingAdj), 0, 100);
   const trustLevel = computeTrustLevel(finalTrustScore);
+  const persistedRating =
+    providedRating != null
+      ? providedRating
+      : clamp(Math.round((finalTrustScore / 20) * 2) / 2, 1, 5);
 
   // Auto-generated badges (derived only from signals).
   const tags = [];
@@ -321,6 +367,9 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
     vendorId: String(vendorId),
     orderId: order?._id ? String(order._id) : null,
     createdAt: new Date().toISOString(),
+    rating: persistedRating,
+    productName: productName || null,
+    serviceHighlights,
     finalTrustScore,
     trustLevel,
     trustBreakdown,
@@ -366,6 +415,11 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
     typingIntervalVarianceMs2,
     typingVarianceZ,
     notReceived,
+    displayName,
+    displayCountry,
+    productName,
+    serviceHighlights,
+    rating: persistedRating,
     trustScore: finalTrustScore,
     baseTrustScore,
     finalTrustScore,
@@ -413,6 +467,11 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
 
   return {
     feedbackId: feedback._id,
+    displayName,
+    displayCountry,
+    productName,
+    serviceHighlights,
+    rating: persistedRating,
     trustScore: finalTrustScore,
     baseTrustScore,
     finalTrustScore,

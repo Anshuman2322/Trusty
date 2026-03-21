@@ -15,7 +15,7 @@ async function request(path, options = {}) {
       },
     })
   } catch {
-    throw new Error(`Failed to fetch: cannot reach backend at ${API_BASE} (CORS or server down)`) // eslint-disable-line no-throw-literal
+    throw new Error(`Failed to fetch: cannot reach backend at ${API_BASE} (CORS or server down)`)
   }
 
   const data = await res.json().catch(() => ({}))

@@ -173,8 +173,8 @@ export function AdminDashboard() {
 
   if (!isAuthedAdmin) {
     return (
-      <div className="list">
-        <section className="card">
+      <div className="adminPage revealUp" style={{ '--reveal-delay': '0ms' }}>
+        <section className="card adminShell adminShell--login">
           <div className="cardTitle">Admin Login</div>
           <div className="muted">Admin access requires authentication.</div>
           <div style={{ height: 10 }} />
@@ -209,8 +209,8 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="list">
-      <section className="card">
+    <div className="adminPage revealUp" style={{ '--reveal-delay': '0ms' }}>
+      <section className="card adminShell">
         <div className="cardTitle">Admin Dashboard</div>
         <div className="muted">Platform audit and monitoring (auditor only; no edit/delete).</div>
 

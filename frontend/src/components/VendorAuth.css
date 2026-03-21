@@ -1,0 +1,203 @@
+.vendorAuthLayout {
+  width: min(760px, 100%);
+  margin: 20px auto;
+}
+
+.vendorAuthCard {
+  border-radius: 22px;
+  border: 1px solid rgba(14, 116, 144, 0.24);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(14, 165, 183, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 248, 252, 0.98));
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.1);
+  padding: clamp(18px, 4vw, 28px);
+}
+
+.vendorAuthCard::before {
+  display: none;
+}
+
+.vendorAuthBadge {
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(14, 165, 183, 0.25);
+  background: rgba(14, 165, 183, 0.12);
+  color: #0b7285;
+  padding: 6px 12px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.vendorAuthTitle {
+  margin: 12px 0 8px;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  letter-spacing: -0.02em;
+}
+
+.vendorAuthSubtitle {
+  margin: 0;
+  color: #5f728d;
+  line-height: 1.6;
+}
+
+.vendorAuthBody {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.vendorAuthForm {
+  display: grid;
+  gap: 12px;
+}
+
+.vendorAuthGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.vendorInput--error {
+  border-color: #fca5a5;
+  background: #fff6f6;
+}
+
+.vendorInput--error:focus-visible {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.16);
+}
+
+.vendorFieldError {
+  margin-top: 4px;
+  color: #b91c1c;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.vendorFieldHelper {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
+.vendorCheckboxWrap {
+  display: grid;
+  gap: 6px;
+}
+
+.vendorCheckboxLabel {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.vendorCheckboxLabel input {
+  margin-top: 3px;
+  accent-color: #0ea5b7;
+}
+
+.vendorRulesList {
+  margin: 0;
+  padding-left: 18px;
+  color: #5f728d;
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.vendorAuthActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vendorAuthActions .btn {
+  min-height: 44px;
+}
+
+.vendorBtnLoading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vendorBtnSpinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  animation: vendorSpin 0.9s linear infinite;
+}
+
+@keyframes vendorSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.vendorAuthLink {
+  color: #0b7285;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.vendorAuthLink:hover {
+  color: #0a5f6f;
+}
+
+.vendorAuthDemo {
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 10px;
+  color: #475569;
+  font-size: 0.84rem;
+}
+
+.vendorAuthFooter {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 0.88rem;
+}
+
+@media (min-width: 760px) {
+  .vendorAuthGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .vendorAuthLayout {
+    margin: 6px auto;
+  }
+
+  .vendorAuthCard {
+    border-radius: 16px;
+    padding: 16px;
+  }
+
+  .vendorAuthActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vendorAuthActions .btn,
+  .vendorAuthLink {
+    width: 100%;
+    text-align: center;
+  }
+
+  .vendorCheckboxLabel {
+    font-size: 0.95rem;
+  }
+}

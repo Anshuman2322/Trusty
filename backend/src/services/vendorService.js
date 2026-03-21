@@ -21,6 +21,124 @@ function computeStatusBadge(avgTrustScore) {
   return 'Risky';
 }
 
+const VENDOR_PROFILE_VISIBILITY_DEFAULTS = {
+  businessName: true,
+  businessEmail: false,
+  businessCategory: true,
+  businessWebsite: false,
+  businessId: false,
+  country: true,
+  state: false,
+  city: false,
+  contactPersonName: false,
+  phoneNumber: false,
+  supportEmail: false,
+  description: false,
+  trustScore: true,
+};
+
+function coerceBoolean(value, fallback) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+
+  const text = String(value || '').trim().toLowerCase();
+  if (text === 'true' || text === '1' || text === 'yes' || text === 'on') return true;
+  if (text === 'false' || text === '0' || text === 'no' || text === 'off') return false;
+
+  return fallback;
+}
+
+function normalizeProfileVisibility(rawVisibility = {}) {
+  const source =
+    rawVisibility && typeof rawVisibility === 'object' && !Array.isArray(rawVisibility)
+      ? rawVisibility
+      : {};
+
+  return {
+    businessName: coerceBoolean(source.businessName, VENDOR_PROFILE_VISIBILITY_DEFAULTS.businessName),
+    businessEmail: coerceBoolean(source.businessEmail, VENDOR_PROFILE_VISIBILITY_DEFAULTS.businessEmail),
+    businessCategory: coerceBoolean(
+      source.businessCategory,
+      VENDOR_PROFILE_VISIBILITY_DEFAULTS.businessCategory
+    ),
+    businessWebsite: coerceBoolean(
+      source.businessWebsite,
+      VENDOR_PROFILE_VISIBILITY_DEFAULTS.businessWebsite
+    ),
+    businessId: coerceBoolean(source.businessId, VENDOR_PROFILE_VISIBILITY_DEFAULTS.businessId),
+    country: coerceBoolean(source.country, VENDOR_PROFILE_VISIBILITY_DEFAULTS.country),
+    state: coerceBoolean(source.state, VENDOR_PROFILE_VISIBILITY_DEFAULTS.state),
+    city: coerceBoolean(source.city, VENDOR_PROFILE_VISIBILITY_DEFAULTS.city),
+    contactPersonName: coerceBoolean(
+      source.contactPersonName,
+      VENDOR_PROFILE_VISIBILITY_DEFAULTS.contactPersonName
+    ),
+    phoneNumber: coerceBoolean(source.phoneNumber, VENDOR_PROFILE_VISIBILITY_DEFAULTS.phoneNumber),
+    supportEmail: coerceBoolean(source.supportEmail, VENDOR_PROFILE_VISIBILITY_DEFAULTS.supportEmail),
+    description: coerceBoolean(source.description, VENDOR_PROFILE_VISIBILITY_DEFAULTS.description),
+    trustScore: coerceBoolean(source.trustScore, VENDOR_PROFILE_VISIBILITY_DEFAULTS.trustScore),
+  };
+}
+
+function toPublicText(value) {
+  const text = String(value || '').trim();
+  return text || null;
+}
+
+function getVisibleField(visibility, key, value) {
+  if (!visibility?.[key]) return null;
+  return toPublicText(value);
+}
+
+function buildVisibleLocation(vendor, visibility) {
+  return {
+    country: getVisibleField(visibility, 'country', vendor?.country),
+    state: getVisibleField(visibility, 'state', vendor?.state),
+    city: getVisibleField(visibility, 'city', vendor?.city),
+  };
+}
+
+async function buildVendorPublicDisplayProfile(vendorId) {
+  const vendor = await Vendor.findById(vendorId).lean();
+  if (!vendor) throw httpError(404, 'Vendor not found', 'VENDOR_NOT_FOUND');
+
+  const { averageTrustScore, totalFeedbacks } = await loadVendorTrustStats(vendor._id);
+  const visibility = normalizeProfileVisibility(vendor?.profileVisibility || {});
+
+  const advancedSettings = vendor?.settings?.advanced || {};
+  const settings = {
+    showTrustScorePublicly: coerceBoolean(advancedSettings.showTrustScorePublicly, true),
+    showLocationInFeedback: coerceBoolean(advancedSettings.showLocationInFeedback, true),
+    enableFeedbackLabels: coerceBoolean(advancedSettings.enableFeedbackLabels, true),
+  };
+
+  const trustVisible = settings.showTrustScorePublicly && visibility.trustScore;
+  const publicName = getVisibleField(visibility, 'businessName', vendor?.name) || 'Private Vendor';
+
+  return {
+    vendorId: String(vendor._id),
+    name: publicName,
+    businessCategory: getVisibleField(visibility, 'businessCategory', vendor?.category),
+    businessEmail: getVisibleField(visibility, 'businessEmail', vendor?.email || vendor?.contactEmail),
+    supportEmail: getVisibleField(
+      visibility,
+      'supportEmail',
+      vendor?.supportEmail || vendor?.contactEmail || vendor?.email
+    ),
+    phoneNumber: getVisibleField(visibility, 'phoneNumber', vendor?.phone),
+    businessWebsite: getVisibleField(visibility, 'businessWebsite', vendor?.website),
+    businessId: getVisibleField(visibility, 'businessId', vendor?.gstBusinessId),
+    contactPersonName: getVisibleField(visibility, 'contactPersonName', vendor?.contactName),
+    description: getVisibleField(visibility, 'description', vendor?.description),
+    location: buildVisibleLocation(vendor, visibility),
+    averageTrustScore: trustVisible ? averageTrustScore : null,
+    totalFeedbacks,
+    statusBadge: trustVisible ? computeStatusBadge(averageTrustScore) : 'Private',
+    visibility,
+    settings,
+  };
+}
+
 async function loadVendorTrustStats(vendorObjectId) {
   const agg = await Feedback.aggregate([
     { $match: { vendorId: vendorObjectId } },
@@ -55,7 +173,9 @@ async function buildVendorPublicProfile(vendorId) {
 }
 
 async function computeVendorPublicProfile(vendorId) {
-  return withMongoReadRetry('vendor public profile', async () => buildVendorPublicProfile(vendorId));
+  return withMongoReadRetry('vendor public profile', async () =>
+    buildVendorPublicDisplayProfile(vendorId)
+  );
 }
 
 async function computeVendorAdminProfile(vendorId) {
