@@ -9,17 +9,24 @@ const { registerRoutes } = require('./routes');
 function createApp() {
   const app = express();
 
-  // ✅ FIXED CORS (Allow all origins for demo)
-  app.use(cors({
-    origin: true, // allow all
-    credentials: true
-  }));
+  // ✅ SUPER SAFE CORS FIX
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200); // important
+    }
+    next();
+  });
+
+  app.use(cors()); // optional but keep
 
   app.use(helmet());
   app.use(express.json({ limit: '256kb' }));
   app.use(morgan('dev'));
 
-  // Health route
   app.get('/api/health', (req, res) => {
     res.json({
       ok: true,
@@ -28,10 +35,8 @@ function createApp() {
     });
   });
 
-  // Routes
   registerRoutes(app);
 
-  // Error handler
   app.use(errorMiddleware);
 
   return app;
