@@ -1,6 +1,6 @@
 import { getToken } from './session'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000'
+const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE || 'http://localhost:5000'
 export { API_BASE }
 
 async function request(path, options = {}) {
@@ -40,14 +40,19 @@ export async function apiPost(path, body) {
 
 export async function apiGetBlob(path) {
   const token = getToken()
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  })
+  let res
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+  } catch {
+    throw new Error(`Failed to fetch file: cannot reach backend at ${API_BASE} (CORS or server down)`)
+  }
 
   if (!res.ok) {
-    throw new Error(`Request failed (${res.status})`)
+    throw new Error(`File request failed (${res.status})`)
   }
 
   return res.blob()
