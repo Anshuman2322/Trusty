@@ -2,6 +2,7 @@ import { getToken } from './session'
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://trusty-tnsg.onrender.com";
 console.log("API_BASE:", API_BASE);
+console.log("NEW BUILD TRIGGER");
 export { API_BASE }
 async function request(path, options = {}) {
   const token = getToken()
