@@ -59,8 +59,8 @@ async function seedOnce() {
   });
 
   await User.create({
-    email: 'admin@trustlens.local',
-    passwordHash: await hashPassword('Admin123'),
+    email: 'trustylens@gmail.com',
+    passwordHash: await hashPassword('Anshu@2322'),
     role: 'ADMIN',
   });
 
@@ -279,7 +279,7 @@ async function seedOnce() {
       home: 'TL-HOME2026',
     },
     demoLogins: {
-      admin: { email: 'admin@trustlens.local', password: 'Admin123' },
+      admin: { email: 'trustylens@gmail.com', password: 'Anshu@2322' },
       vendorTech: { email: 'vendor.tech@trustlens.local', password: 'Vendor123' },
       vendorFashion: { email: 'vendor.fashion@trustlens.local', password: 'Vendor123' },
       vendorHome: { email: 'vendor.home@trustlens.local', password: 'Vendor123' },

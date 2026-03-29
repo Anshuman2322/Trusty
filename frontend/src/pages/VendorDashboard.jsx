@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { FeedbackExplanation } from '../components/FeedbackExplanation'
 import {
@@ -41,6 +41,7 @@ const DASHBOARD_VIEWS = new Set([
   'orders',
   'payments',
   'feedback',
+  'messages',
   'analytics',
   'customers',
   'profile',
@@ -162,6 +163,97 @@ function FeedbackSection({ feedbacks }) {
   )
 }
 
+function CustomerMessagesSection({
+  messages,
+  loading,
+  lastSyncedAt,
+  replyingId,
+  statusBusyId,
+  onReply,
+  onStatus,
+  onRefresh,
+}) {
+  const [replyDrafts, setReplyDrafts] = useState({})
+
+  return (
+    <section className="vdSection">
+      <div className="vdSectionHead">
+        <h2>Customer Messages</h2>
+        <p>Respond to customer requests and close resolved conversations.</p>
+        <p>
+          Auto-refresh: every 15 seconds.
+          {lastSyncedAt ? ` Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}.` : ''}
+        </p>
+      </div>
+
+      <div>
+        <button type="button" className="btn secondary" onClick={onRefresh}>Refresh Messages</button>
+      </div>
+
+      {loading ? <div className="vdTableEmpty">Loading customer messages...</div> : null}
+      {!loading && messages.length === 0 ? <div className="vdTableEmpty">No customer messages yet.</div> : null}
+
+      <div className="vdSupportMessageList">
+        {messages.map((item) => (
+          <article className="vdSupportMessageCard" key={item._id}>
+            <div className="vdSupportMessageHeader">
+              <div>
+                <strong>{item.userName || 'Customer'}</strong>
+                <span>{item.userEmail || 'No email'}</span>
+                {item.userPhone ? <span>{item.userPhone}</span> : null}
+                <span>{new Date(item.createdAt).toLocaleString()}</span>
+              </div>
+              <span className={`vdSupportStatus vdSupportStatus--${String(item.status || 'open').toLowerCase()}`}>
+                {item.status}
+              </span>
+            </div>
+
+            <p className="vdSupportMessageBody">{item.message}</p>
+
+            {item.reply ? (
+              <div className="vdSupportReplyBox">
+                <span>Latest Reply</span>
+                <p>{item.reply}</p>
+              </div>
+            ) : null}
+
+            <div className="vdSupportActions">
+              <textarea
+                className="textarea"
+                placeholder="Write a clear reply for customer"
+                value={replyDrafts[item._id] || ''}
+                onChange={(event) => setReplyDrafts((prev) => ({ ...prev, [item._id]: event.target.value }))}
+              />
+
+              <div className="vdSupportActionButtons">
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={replyingId === item._id || !(replyDrafts[item._id] || '').trim()}
+                  onClick={() => onReply(item._id, replyDrafts[item._id], () => setReplyDrafts((prev) => ({ ...prev, [item._id]: '' })))}
+                >
+                  {replyingId === item._id ? 'Sending...' : 'Send Reply'}
+                </button>
+
+                <select
+                  className="input"
+                  value={item.status || 'open'}
+                  onChange={(event) => onStatus(item._id, event.target.value)}
+                  disabled={statusBusyId === item._id}
+                >
+                  <option value="open">open</option>
+                  <option value="replied">replied</option>
+                  <option value="closed">closed</option>
+                </select>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function VendorDashboard({ initialView = 'dashboard' }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -190,6 +282,10 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
   const [feedbacks, setFeedbacks] = useState([])
   const [vendorProfile, setVendorProfile] = useState(null)
   const [vendorSettings, setVendorSettings] = useState(null)
+  const [supportMessages, setSupportMessages] = useState([])
+  const [supportMessagesLastSyncedAt, setSupportMessagesLastSyncedAt] = useState('')
+  const [replyingMessageId, setReplyingMessageId] = useState('')
+  const [messageStatusBusyId, setMessageStatusBusyId] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -267,6 +363,17 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     return () => window.removeEventListener('keydown', handleEsc)
   }, [sidebarMobileOpen])
 
+  const refreshSupportMessages = useCallback(async (options = {}) => {
+    try {
+      const messagesData = await apiGet('/api/support/vendor/messages')
+      setSupportMessages(messagesData?.messages || [])
+      setSupportMessagesLastSyncedAt(new Date().toISOString())
+    } catch (e) {
+      if (!options.silent) setError(e?.message || 'Failed to load customer messages')
+      if (!options.keepDataOnFailure) setSupportMessages([])
+    }
+  }, [])
+
   async function refresh(options = {}) {
     const allowAuthRetry = options.allowAuthRetry !== false
     if (!vendorId) return
@@ -309,6 +416,8 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
       setFeedbacks(dashboardData?.feedbacks || [])
       setVendorProfile(dashboardData?.profile || null)
       setVendorSettings(dashboardData?.settings || null)
+
+      await refreshSupportMessages({ silent: true, keepDataOnFailure: true })
     } catch (e) {
       if (e?.status === 401 || e?.status === 403) {
         const liveSession = getSession()
@@ -343,6 +452,18 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     applyWorkspaceTheme(vendorSettings.system.darkMode)
   }, [vendorSettings?.system?.darkMode])
 
+  useEffect(() => {
+    if (!vendorId || activeView !== 'messages') return undefined
+
+    const tick = () => {
+      refreshSupportMessages({ silent: true, keepDataOnFailure: true })
+    }
+
+    tick()
+    const timer = window.setInterval(tick, 15000)
+    return () => window.clearInterval(timer)
+  }, [activeView, vendorId, refreshSupportMessages])
+
   function onLogout(sessionMessage = '') {
     setSidebarMobileOpen(false)
     clearSession()
@@ -352,6 +473,10 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     setFeedbacks([])
     setVendorProfile(null)
     setVendorSettings(null)
+    setSupportMessages([])
+    setSupportMessagesLastSyncedAt('')
+    setReplyingMessageId('')
+    setMessageStatusBusyId('')
     setCreateOpen(false)
     setCreateResult(null)
     setSelectedFeedback(null)
@@ -511,6 +636,33 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     navigate(`/vendor/dashboard?view=${normalized}`)
   }
 
+  async function handleReplyMessage(messageId, replyText, onDone) {
+    try {
+      setReplyingMessageId(messageId)
+      setError('')
+      await apiPost(`/api/support/vendor/messages/${messageId}/reply`, { reply: replyText })
+      await refreshSupportMessages({ keepDataOnFailure: true })
+      onDone()
+    } catch (e) {
+      setError(e?.message || 'Failed to send reply')
+    } finally {
+      setReplyingMessageId('')
+    }
+  }
+
+  async function handleMessageStatus(messageId, status) {
+    try {
+      setMessageStatusBusyId(messageId)
+      setError('')
+      await apiPost(`/api/support/vendor/messages/${messageId}/status`, { status })
+      await refreshSupportMessages({ keepDataOnFailure: true })
+    } catch (e) {
+      setError(e?.message || 'Failed to update message status')
+    } finally {
+      setMessageStatusBusyId('')
+    }
+  }
+
   function handleProfileSaved(nextProfile, nextUser) {
     if (nextProfile) {
       setVendorProfile(nextProfile)
@@ -622,6 +774,21 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
 
     if (activeView === 'feedback') {
       return <FeedbackSection feedbacks={feedbacks} />
+    }
+
+    if (activeView === 'messages') {
+      return (
+        <CustomerMessagesSection
+          messages={supportMessages}
+          loading={loading}
+          lastSyncedAt={supportMessagesLastSyncedAt}
+          replyingId={replyingMessageId}
+          statusBusyId={messageStatusBusyId}
+          onReply={handleReplyMessage}
+          onStatus={handleMessageStatus}
+          onRefresh={() => refreshSupportMessages({ keepDataOnFailure: true })}
+        />
+      )
     }
 
     if (activeView === 'analytics') {

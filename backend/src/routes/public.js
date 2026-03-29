@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 
 const Vendor = require('../models/Vendor');
 const Order = require('../models/Order');
@@ -9,6 +10,15 @@ const { withMongoReadRetry } = require('../services/mongoReadRetry');
 const { computeVendorPublicProfile } = require('../services/vendorService');
 
 const publicRouter = express.Router();
+
+function ensureValidVendorId(vendorId) {
+  if (!mongoose.Types.ObjectId.isValid(String(vendorId || ''))) {
+    const err = new Error('Vendor not found');
+    err.statusCode = 404;
+    err.code = 'VENDOR_NOT_FOUND';
+    throw err;
+  }
+}
 
 const VENDOR_PROFILE_VISIBILITY_DEFAULTS = {
   businessName: true,
@@ -119,6 +129,7 @@ publicRouter.get('/vendors', async (req, res, next) => {
 
 publicRouter.get('/vendor/:vendorId', async (req, res, next) => {
   try {
+    ensureValidVendorId(req.params.vendorId);
     const profile = await computeVendorPublicProfile(req.params.vendorId);
     res.json({ ok: true, vendor: profile });
   } catch (err) {
@@ -128,6 +139,7 @@ publicRouter.get('/vendor/:vendorId', async (req, res, next) => {
 
 publicRouter.get('/vendor/:vendorId/feedbacks', async (req, res, next) => {
   try {
+    ensureValidVendorId(req.params.vendorId);
     const vendor = await withMongoReadRetry('public vendor lookup', async () =>
       Vendor.findById(req.params.vendorId).lean()
     );
@@ -155,6 +167,7 @@ publicRouter.get('/vendor/:vendorId/feedbacks', async (req, res, next) => {
 publicRouter.get('/vendor/:vendorId/verify-code/:code', async (req, res, next) => {
   try {
     const { vendorId, code } = req.params;
+    ensureValidVendorId(vendorId);
     const order = await withMongoReadRetry('feedback code verification', async () =>
       Order.findOne({ vendorId, feedbackCode: code }).lean()
     );
@@ -187,6 +200,7 @@ publicRouter.get('/vendor/:vendorId/verify-code/:code', async (req, res, next) =
 
 publicRouter.post('/vendor/:vendorId/feedbacks', async (req, res, next) => {
   try {
+    ensureValidVendorId(req.params.vendorId);
     const result = await submitFeedback({
       vendorId: req.params.vendorId,
       payload: req.body,

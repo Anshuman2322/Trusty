@@ -1022,6 +1022,81 @@ body[data-theme='dark'] .vdStatus--pending {
   display: grid;
   gap: 0.7rem;
 }
+.vdSupportMessageList {
+  display: grid;
+  gap: 14px;
+}
+.vdSupportMessageCard {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card-bg);
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.vdSupportMessageHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+.vdSupportMessageHeader strong {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+.vdSupportMessageHeader span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.vdSupportStatus {
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: lowercase;
+}
+.vdSupportStatus--open {
+  background: rgba(42, 157, 255, 0.12);
+  color: #1f4cbd;
+}
+.vdSupportStatus--replied {
+  background: rgba(57, 190, 121, 0.14);
+  color: #137447;
+}
+.vdSupportStatus--closed {
+  background: rgba(97, 113, 139, 0.16);
+  color: #3d4d66;
+}
+.vdSupportMessageBody {
+  margin: 10px 0;
+  color: var(--text-primary);
+}
+.vdSupportReplyBox {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--card-bg) 84%, #5e72ff 16%);
+}
+.vdSupportReplyBox span {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.vdSupportReplyBox p {
+  margin: 4px 0 0;
+}
+.vdSupportActions {
+  margin-top: 10px;
+  display: grid;
+  gap: 9px;
+}
+.vdSupportActionButtons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 
 .vdModalCard {
   width: min(720px, 95vw);

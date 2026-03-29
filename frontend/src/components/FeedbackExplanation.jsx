@@ -452,7 +452,7 @@ function TrustExplanationModal({ feedback, onClose }) {
   )
 }
 
-export function FeedbackExplanation({ feedback, buttonLabel = 'Explanation' }) {
+export function FeedbackExplanation({ feedback, buttonLabel = 'Explanation', buttonClassName = '' }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -496,7 +496,7 @@ export function FeedbackExplanation({ feedback, buttonLabel = 'Explanation' }) {
     <>
       <button
         type="button"
-        className="explainSummary"
+        className={buttonClassName ? `explainSummary ${buttonClassName}` : 'explainSummary'}
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}

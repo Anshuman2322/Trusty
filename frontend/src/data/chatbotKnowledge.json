@@ -1,0 +1,44 @@
+[
+  {
+    "id": "trust-score",
+    "title": "How Trust Score Works",
+    "keywords": ["trust", "score", "rating", "ai", "formula"],
+    "answer": "Trusty computes a 0-100 explainable trust score using verification signals: purchase validation, delivery confirmation, behavior consistency, risk-safe device patterns, and anomaly detection. Each review is then labeled as High, Medium, or Low trust with transparent reasons.",
+    "suggestions": ["Submit Feedback", "Privacy & Security", "Raise Ticket"]
+  },
+  {
+    "id": "feedback-submission",
+    "title": "Submit Feedback",
+    "keywords": ["feedback", "review", "submit", "token", "code"],
+    "answer": "To submit feedback, open the vendor page, select the vendor, and add your review. If you have a feedback code from your order, include it for stronger verification. Verified reviews get richer trust explainability.",
+    "suggestions": ["How Trust Score Works", "Contact Vendor", "Raise Ticket"]
+  },
+  {
+    "id": "privacy-security",
+    "title": "Privacy & Security",
+    "keywords": ["privacy", "security", "data", "safe", "blockchain", "hash"],
+    "answer": "Trusty is privacy-safe by design. We use minimal required data, hashed technical signals, and audit-friendly integrity checks. Sensitive details are never publicly exposed. Verified proofs can be anchored for tamper-resistance.",
+    "suggestions": ["How Trust Score Works", "Raise Ticket"]
+  },
+  {
+    "id": "vendor-contact",
+    "title": "Vendor Contact",
+    "keywords": ["vendor", "contact", "seller", "merchant", "message"],
+    "answer": "You can message a vendor directly from support. Vendors manage these messages in their dashboard and can reply or resolve them. Use this for order clarifications, delivery updates, and service issues.",
+    "suggestions": ["Contact Vendor", "Raise Ticket"]
+  },
+  {
+    "id": "ticket-system",
+    "title": "Ticket System",
+    "keywords": ["ticket", "support", "issue", "escalate", "admin"],
+    "answer": "If your issue needs platform support, raise a ticket. Admin reviews, updates status (open, in-progress, resolved), and replies by dashboard workflow. You also receive email updates when admin responds.",
+    "suggestions": ["Raise Ticket", "Track My Ticket"]
+  },
+  {
+    "id": "sla",
+    "title": "Support Response Time",
+    "keywords": ["sla", "response", "time", "hours", "when"],
+    "answer": "Typical response targets: chatbot instantly, vendor messaging within one business day, and admin tickets within 24-48 hours depending on priority. Security/account issues are prioritized.",
+    "suggestions": ["Contact Vendor", "Raise Ticket", "Track My Ticket"]
+  }
+]

@@ -9,10 +9,12 @@ import { TransparencyPage } from './pages/TransparencyPage'
 import { VendorPage } from './pages/VendorPage'
 import { VendorLoginPage } from './pages/VendorLoginPage'
 import { VendorSignupPage } from './pages/VendorSignupPage'
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { PublicView } from './pages/PublicView'
 import { VendorDashboard } from './pages/VendorDashboard'
 import { VendorAnalyticsPage } from './pages/VendorAnalyticsPage'
 import { AdminDashboard } from './pages/AdminDashboard'
+import { Chatbot } from './components/Chatbot'
 import { apiGet } from './lib/api'
 import { getSession } from './lib/session'
 
@@ -45,8 +47,9 @@ function App() {
   const [vendorsError, setVendorsError] = useState('')
   const [theme, setTheme] = useState(getInitialTheme)
   const [topbarMenuOpen, setTopbarMenuOpen] = useState(false)
-  const isMarketingRoute = ['/', '/how-it-works', '/vendor', '/public', '/admin', '/about', '/transparency'].includes(location.pathname)
+  const isMarketingRoute = ['/', '/how-it-works', '/vendor', '/public', '/about', '/transparency'].includes(location.pathname)
   const isVendorWorkspaceRoute = location.pathname.startsWith('/vendor/dashboard') || location.pathname.startsWith('/vendor/analytics')
+  const isAdminWorkspaceRoute = location.pathname.startsWith('/admin')
 
   useEffect(() => {
     let cancelled = false
@@ -100,7 +103,8 @@ function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
+      {!isAdminWorkspaceRoute ? (
+        <header className="topbar">
         <div className="brand">
           <Link to="/" className="brandLink">
             <div className="brandTitle">Trusty</div>
@@ -146,9 +150,10 @@ function App() {
             <span className={theme === 'dark' ? 'themeIcon active' : 'themeIcon'}>🌙</span>
           </button>
         </div>
-      </header>
+        </header>
+      ) : null}
 
-      <main className={isMarketingRoute ? 'container container--landing' : isVendorWorkspaceRoute ? 'container container--workspace' : 'container'}>
+      <main className={isAdminWorkspaceRoute ? '' : isMarketingRoute ? 'container container--landing' : isVendorWorkspaceRoute ? 'container container--workspace' : 'container'}>
         {vendorsError ? <div className="alert error">{vendorsError}</div> : null}
         {vendorsLoading ? <div className="muted">Loading vendors…</div> : null}
 
@@ -161,6 +166,7 @@ function App() {
           <Route path="/vendor" element={<VendorPage />} />
           <Route path="/vendor/login" element={<VendorLoginPage />} />
           <Route path="/vendor/signup" element={<VendorSignupPage />} />
+          <Route path="/vendor/forgot-password" element={<ForgotPasswordPage />} />
           <Route
             path="/public"
             element={<PublicView vendors={vendors} defaultVendorId={defaultVendorId} />}
@@ -188,9 +194,13 @@ function App() {
         </Routes>
       </main>
 
-      <footer className="footer">
+      {!isAdminWorkspaceRoute ? (
+        <footer className="footer">
         <div className="muted">Public pages are open. Vendor and Admin dashboards require login.</div>
-      </footer>
+        </footer>
+      ) : null}
+
+      {!isAdminWorkspaceRoute ? <Chatbot /> : null}
     </div>
   )
 }

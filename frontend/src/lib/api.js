@@ -1,6 +1,7 @@
 import { getToken } from './session'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000'
+export { API_BASE }
 
 async function request(path, options = {}) {
   const token = getToken()
@@ -35,4 +36,19 @@ export async function apiGet(path) {
 
 export async function apiPost(path, body) {
   return request(path, { method: 'POST', body: JSON.stringify(body || {}) })
+}
+
+export async function apiGetBlob(path) {
+  const token = getToken()
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error(`Request failed (${res.status})`)
+  }
+
+  return res.blob()
 }

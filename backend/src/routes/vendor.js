@@ -1,11 +1,14 @@
 const express = require('express');
+const crypto = require('crypto');
 
 const User = require('../models/User');
 const Vendor = require('../models/Vendor');
 const Order = require('../models/Order');
 const Feedback = require('../models/Feedback');
+const OTP = require('../models/OTP');
 const { requireAuth, requireRole, requireVendorParamMatch } = require('../middleware/authMiddleware');
 const { hashPassword, signToken, verifyPassword, httpError } = require('../services/authService');
+const { sendVerificationOtpEmail } = require('../utils/sendEmail');
 const { extractClientIp } = require('../services/ipIntelService');
 const { withMongoReadRetry } = require('../services/mongoReadRetry');
 const {
@@ -275,6 +278,16 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 }
 
+function generateOtpCode() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashOtp(email, otp) {
+  const pepper = String(process.env.OTP_PEPPER || '').trim();
+  const payload = `${normalizeEmail(email)}:${String(otp || '').trim()}:${pepper}`;
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
+
 function sanitizePhone(value) {
   const raw = String(value || '').trim();
   if (!raw) return undefined;
@@ -342,66 +355,11 @@ function buildVendorAuthPayload({ user, vendor }) {
 
 vendorRouter.post('/signup', async (req, res, next) => {
   try {
-    const businessName = String(req.body?.businessName || '').trim();
-    const email = normalizeEmail(req.body?.email);
-    const password = String(req.body?.password || '');
-    const categoryRaw = String(req.body?.category || 'Other').trim();
-    const country = String(req.body?.country || '').trim();
-    const city = String(req.body?.city || '').trim();
-    const contactName = String(req.body?.contactName || '').trim();
-    const phone = sanitizePhone(req.body?.phone);
-    const termsAccepted = Boolean(req.body?.termsAccepted);
-
-    if (!businessName) throw httpError(400, 'Business name is required', 'VALIDATION');
-    if (!email) throw httpError(400, 'Business email is required', 'VALIDATION');
-    if (!isValidEmail(email)) throw httpError(400, 'Please provide a valid email address', 'VALIDATION');
-    if (!country) throw httpError(400, 'Country is required', 'VALIDATION');
-    if (!termsAccepted) {
-      throw httpError(400, 'You must agree to the Trusty platform integrity rules', 'VALIDATION');
-    }
-
-    const category = VENDOR_ALLOWED_CATEGORIES.has(categoryRaw) ? categoryRaw : 'Other';
-
-    const existingUser = await withMongoReadRetry('vendor signup user lookup', async () =>
-      User.findOne({ email }).lean()
+    throw httpError(
+      410,
+      'Direct signup is disabled. Use /api/auth/send-otp, /api/auth/verify-otp, and /api/auth/vendor-signup.',
+      'DEPRECATED'
     );
-    if (existingUser) throw httpError(409, 'Email already registered', 'CONFLICT');
-
-    const existingVendor = await withMongoReadRetry('vendor signup vendor lookup', async () =>
-      Vendor.findOne({ email }).lean()
-    );
-    if (existingVendor) throw httpError(409, 'Business email already in use', 'CONFLICT');
-
-    const passwordHash = await hashPassword(password);
-
-    const vendor = await Vendor.create({
-      name: businessName,
-      email,
-      contactEmail: email,
-      category,
-      country,
-      city: city || undefined,
-      contactName: contactName || undefined,
-      phone,
-      termsAccepted,
-      termsAcceptedAt: termsAccepted ? new Date() : undefined,
-    });
-
-    const user = await User.create({
-      email,
-      passwordHash,
-      role: 'VENDOR',
-      vendorId: vendor._id,
-    });
-
-    const authPayload = buildVendorAuthPayload({ user, vendor });
-
-    res.status(201).json({
-      ok: true,
-      ...authPayload,
-      onboardingMessage:
-        'Welcome to Trusty. Start by creating your first order to collect verified feedback.',
-    });
   } catch (err) {
     next(err);
   }
@@ -411,8 +369,10 @@ vendorRouter.post('/login', async (req, res, next) => {
   try {
     const email = normalizeEmail(req.body?.email);
     const password = String(req.body?.password || '');
+    const otpInput = String(req.body?.otp || '').trim();
 
     if (!email || !password) throw httpError(400, 'email and password are required', 'VALIDATION');
+    if (!isValidEmail(email)) throw httpError(400, 'Please provide a valid email address', 'VALIDATION');
 
     const user = await withMongoReadRetry('vendor login user lookup', async () =>
       User.findOne({ email, role: 'VENDOR' })
@@ -428,6 +388,75 @@ vendorRouter.post('/login', async (req, res, next) => {
       Vendor.findById(user.vendorId)
     );
     if (!vendor) throw httpError(403, 'Vendor profile not found', 'FORBIDDEN');
+    if (vendor.isTerminated) {
+      throw httpError(
+        403,
+        'Vendor account is terminated. Contact platform admin for review.',
+        'VENDOR_TERMINATED'
+      );
+    }
+
+    if (!otpInput) {
+      const otpCode = generateOtpCode();
+      const otpHash = hashOtp(email, otpCode);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+      await OTP.findOneAndUpdate(
+        { email, purpose: 'LOGIN' },
+        {
+          $set: {
+            otp: otpHash,
+            attemptsLeft: 3,
+            expiresAt,
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      const delivery = await sendVerificationOtpEmail({ toEmail: email, otp: otpCode });
+
+      res.json({
+        ok: true,
+        requiresOtp: true,
+        message:
+          delivery?.delivered === false
+            ? delivery?.reason === 'SMTP_AUTH_FAILED'
+              ? 'OTP generated in backend console (Gmail app password rejected). Enter it to continue login.'
+              : delivery?.reason === 'SMTP_DELIVERY_FAILED'
+                ? 'OTP generated in backend console (email delivery failed). Enter it to continue login.'
+                : 'OTP generated in backend console (email not configured). Enter it to continue login.'
+            : 'OTP sent to your email. Enter it to continue login.',
+      });
+      return;
+    }
+
+    const otpDoc = await OTP.findOne({ email, purpose: 'LOGIN' });
+    if (!otpDoc) throw httpError(400, 'Invalid OTP. Please request a new code.', 'OTP_INVALID');
+
+    if (new Date(otpDoc.expiresAt).getTime() <= Date.now()) {
+      await OTP.deleteOne({ _id: otpDoc._id });
+      throw httpError(400, 'OTP expired. Please request a new code.', 'OTP_EXPIRED');
+    }
+
+    if (Number(otpDoc.attemptsLeft || 0) <= 0) {
+      await OTP.deleteOne({ _id: otpDoc._id });
+      throw httpError(429, 'OTP attempt limit exceeded. Please request a new code.', 'OTP_ATTEMPTS_EXCEEDED');
+    }
+
+    const incomingHash = hashOtp(email, otpInput);
+    if (incomingHash !== String(otpDoc.otp || '')) {
+      otpDoc.attemptsLeft = Math.max(0, Number(otpDoc.attemptsLeft || 0) - 1);
+      if (otpDoc.attemptsLeft <= 0) {
+        await OTP.deleteOne({ _id: otpDoc._id });
+      } else {
+        await otpDoc.save();
+      }
+      throw httpError(400, 'Invalid OTP', 'OTP_INVALID');
+    }
+
+    await OTP.deleteOne({ _id: otpDoc._id });
+    user.lastLoginAt = new Date();
+    await user.save();
 
     const authPayload = buildVendorAuthPayload({ user, vendor });
 
@@ -439,6 +468,29 @@ vendorRouter.post('/login', async (req, res, next) => {
 
 vendorRouter.use(requireAuth);
 vendorRouter.use(requireRole('VENDOR'));
+vendorRouter.use(async (req, res, next) => {
+  try {
+    const vendorId = req.user?.vendorId;
+    if (!vendorId) return next(httpError(403, 'Vendor access required', 'FORBIDDEN'));
+
+    const vendor = await withMongoReadRetry('vendor active check', async () =>
+      Vendor.findById(vendorId).select({ isTerminated: 1 }).lean()
+    );
+    if (!vendor) return next(httpError(404, 'Vendor profile not found', 'VENDOR_NOT_FOUND'));
+    if (vendor.isTerminated) {
+      return next(
+        httpError(
+          403,
+          'Vendor account is terminated. Access is read-only and dashboard actions are disabled.',
+          'VENDOR_TERMINATED'
+        )
+      );
+    }
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+});
 vendorRouter.use('/:vendorId', requireVendorParamMatch);
 
 vendorRouter.get('/:vendorId/overview', async (req, res, next) => {

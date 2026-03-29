@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { verifyToken, httpError } = require('../services/authService');
 
 function requireAuth(req, res, next) {
@@ -24,6 +25,9 @@ function requireRole(role) {
 function requireVendorParamMatch(req, res, next) {
   const vendorId = req.params.vendorId;
   if (!req.user?.vendorId) return next(httpError(403, 'Vendor access required', 'FORBIDDEN'));
+  if (!mongoose.Types.ObjectId.isValid(String(vendorId || ''))) {
+    return next(httpError(404, 'Vendor not found', 'VENDOR_NOT_FOUND'));
+  }
   if (String(req.user.vendorId) !== String(vendorId)) {
     return next(httpError(403, 'Vendor mismatch', 'FORBIDDEN'));
   }

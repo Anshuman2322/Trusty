@@ -6,6 +6,7 @@ const UserSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     role: { type: String, required: true, enum: ['ADMIN', 'VENDOR'] },
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', default: null },
+    lastLoginAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

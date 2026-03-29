@@ -4,20 +4,36 @@ function sleep(ms) {
 
 function isTransientMongoReadError(err) {
   const message = String(err?.message || '');
+  const lowerMessage = message.toLowerCase();
   const causeCode = err?.cause?.code;
   const code = err?.code;
+  const name = String(err?.name || '');
+  const causeMessage = String(err?.cause?.message || '').toLowerCase();
+  const reasonMessage = String(err?.reason?.message || '').toLowerCase();
+
+  const hasTlsAlert =
+    lowerMessage.includes('tlsv1 alert internal error') ||
+    causeMessage.includes('tlsv1 alert internal error') ||
+    reasonMessage.includes('tlsv1 alert internal error');
+
+  const hasPoolClearedSignal =
+    lowerMessage.includes('poolclearederror') ||
+    (lowerMessage.includes('connection pool for') && lowerMessage.includes('was cleared because another operation failed')) ||
+    causeMessage.includes('poolclearederror') ||
+    reasonMessage.includes('poolclearederror');
 
   return (
-    err?.name === 'MongoPoolClearedError' ||
-    message.includes('PoolClearedError') ||
+    name === 'MongoPoolClearedError' ||
+    name === 'MongoServerSelectionError' ||
+    hasPoolClearedSignal ||
     code === 'ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR' ||
     causeCode === 'ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR' ||
-    message.includes('tlsv1 alert internal error')
+    hasTlsAlert
   );
 }
 
 async function withMongoReadRetry(label, work) {
-  const maxAttempts = 3;
+  const maxAttempts = 5;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {

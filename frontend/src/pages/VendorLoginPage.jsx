@@ -4,6 +4,7 @@ import { apiPost } from '../lib/api'
 import { getSession, setSession } from '../lib/session'
 import { VendorAuthCard } from '../components/VendorAuthCard'
 import { FormInput } from '../components/FormInput'
+import { OTPInput } from '../components/OTPInput'
 
 function isAuthedVendor(session) {
   return Boolean(session?.token) && session?.user?.role === 'VENDOR' && Boolean(session?.user?.vendorId)
@@ -18,7 +19,10 @@ export function VendorLoginPage() {
   }))
   const [errors, setErrors] = useState({})
   const [submitError, setSubmitError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpValue, setOtpValue] = useState('')
   const signupSuccessMessage = String(location.state?.signupSuccessMessage || '')
   const sessionMessage = String(location.state?.sessionMessage || '')
 
@@ -30,6 +34,7 @@ export function VendorLoginPage() {
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: '' }))
+    setSubmitError('')
   }
 
   async function onSubmit(event) {
@@ -40,6 +45,7 @@ export function VendorLoginPage() {
 
     setErrors(nextErrors)
     setSubmitError('')
+    setSuccessMessage('')
     if (Object.keys(nextErrors).length) return
 
     try {
@@ -47,13 +53,44 @@ export function VendorLoginPage() {
       const data = await apiPost('/api/vendor/login', {
         email: String(form.email || '').trim(),
         password: form.password,
+        ...(otpSent ? { otp: otpValue } : {}),
       })
+
+      if (data?.requiresOtp) {
+        setOtpSent(true)
+        setOtpValue('')
+        setSuccessMessage(data?.message || 'OTP sent. Enter it to continue.')
+        return
+      }
 
       setSession({ token: data.token, user: data.user })
       const returnTo = String(location.state?.from || '/vendor/dashboard')
       navigate(returnTo.startsWith('/vendor') ? returnTo : '/vendor/dashboard', { replace: true })
     } catch (error) {
       setSubmitError(error?.message || 'Login failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function onResendOtp() {
+    try {
+      setSubmitting(true)
+      setSubmitError('')
+      setSuccessMessage('')
+
+      const data = await apiPost('/api/vendor/login', {
+        email: String(form.email || '').trim(),
+        password: form.password,
+      })
+
+      if (data?.requiresOtp) {
+        setOtpSent(true)
+        setOtpValue('')
+        setSuccessMessage(data?.message || 'A new OTP has been sent to your email.')
+      }
+    } catch (error) {
+      setSubmitError(error?.message || 'Failed to resend OTP')
     } finally {
       setSubmitting(false)
     }
@@ -72,6 +109,7 @@ export function VendorLoginPage() {
     >
       {signupSuccessMessage ? <div className="alert">{signupSuccessMessage}</div> : null}
       {sessionMessage ? <div className="alert">{sessionMessage}</div> : null}
+      {successMessage ? <div className="alert">{successMessage}</div> : null}
       {submitError ? <div className="alert error">{submitError}</div> : null}
 
       <form className="vendorAuthForm" onSubmit={onSubmit} noValidate>
@@ -99,21 +137,40 @@ export function VendorLoginPage() {
           error={errors.password}
         />
 
+        {otpSent ? (
+          <div className="card" style={{ borderRadius: 12, border: '1px solid #d7e3ef', padding: 12, display: 'grid', gap: 10 }}>
+            <strong style={{ fontSize: '0.9rem' }}>Email OTP</strong>
+            <OTPInput
+              value={otpValue}
+              onChange={(value) => {
+                setOtpValue(value)
+                setSubmitError('')
+              }}
+              autoFocus
+              disabled={submitting}
+            />
+            <div style={{ fontSize: '0.82rem', color: '#475569' }}>
+              Enter the 6-digit code sent to your email to finish login.
+            </div>
+          </div>
+        ) : null}
+
         <div className="vendorAuthActions">
-          <a
-            href="#"
-            className="vendorAuthLink"
-            onClick={(event) => event.preventDefault()}
-          >
+          <Link to="/vendor/forgot-password" className="vendorAuthLink">
             Forgot Password?
-          </a>
-          <button type="submit" className="btn" disabled={submitting}>
+          </Link>
+          {otpSent ? (
+            <button type="button" className="btn secondary" onClick={onResendOtp} disabled={submitting}>
+              Resend OTP
+            </button>
+          ) : null}
+          <button type="submit" className="btn" disabled={submitting || (otpSent && otpValue.length !== 6)}>
             {submitting ? (
               <span className="vendorBtnLoading">
                 <span className="vendorBtnSpinner" aria-hidden="true" />
-                <span>Signing in securely...</span>
+                <span>{otpSent ? 'Verifying OTP...' : 'Signing in securely...'}</span>
               </span>
-            ) : 'Login'}
+            ) : otpSent ? 'Verify OTP & Login' : 'Login'}
           </button>
         </div>
       </form>

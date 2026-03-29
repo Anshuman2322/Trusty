@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiPost } from '../../lib/api'
+import { OTPInput } from '../OTPInput'
 import { CheckboxField } from './CheckboxField'
 import { InputField } from './InputField'
 import { SelectField } from './SelectField'
@@ -59,6 +60,14 @@ export function SignupForm() {
   const [touched, setTouched] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [otpValue, setOtpValue] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpSending, setOtpSending] = useState(false)
+  const [otpVerifying, setOtpVerifying] = useState(false)
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [verificationToken, setVerificationToken] = useState('')
+  const [otpError, setOtpError] = useState('')
+  const [otpSuccess, setOtpSuccess] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
@@ -66,8 +75,21 @@ export function SignupForm() {
   const isFormValid = Object.keys(errors).length === 0
 
   function setField(field, value) {
+    const nextValue = field === 'email' ? String(value || '').trim() : value
+
     setForm((prev) => ({ ...prev, [field]: value }))
     setSubmitError('')
+
+    if (field === 'email') {
+      setOtpSent(false)
+      setOtpVerified(false)
+      setOtpValue('')
+      setVerificationToken('')
+      setOtpError('')
+      setOtpSuccess('')
+
+      if (!nextValue) return
+    }
   }
 
   function markTouched(field) {
@@ -76,6 +98,69 @@ export function SignupForm() {
 
   function fieldError(name) {
     return touched[name] ? errors[name] : ''
+  }
+
+  async function sendOtp() {
+    const email = String(form.email || '').trim().toLowerCase()
+    if (!isValidEmail(email)) {
+      setTouched((prev) => ({ ...prev, email: true }))
+      setOtpError('Please enter a valid business email before sending OTP.')
+      setOtpSuccess('')
+      return
+    }
+
+    try {
+      setOtpSending(true)
+      setOtpError('')
+      setOtpSuccess('')
+      setOtpVerified(false)
+      setVerificationToken('')
+      setOtpValue('')
+
+      await apiPost('/api/auth/send-otp', {
+        email,
+        purpose: 'SIGNUP',
+      })
+
+      setOtpSent(true)
+      setOtpSuccess('Verification code sent to your email. It is valid for 5 minutes.')
+    } catch (error) {
+      setOtpError(error?.message || 'Failed to send OTP')
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  async function verifyOtp() {
+    const email = String(form.email || '').trim().toLowerCase()
+    if (!otpSent) return
+    if (String(otpValue || '').length !== 6) {
+      setOtpError('Please enter the 6-digit OTP.')
+      setOtpSuccess('')
+      return
+    }
+
+    try {
+      setOtpVerifying(true)
+      setOtpError('')
+      setOtpSuccess('')
+
+      const data = await apiPost('/api/auth/verify-otp', {
+        email,
+        otp: otpValue,
+        purpose: 'SIGNUP',
+      })
+
+      setOtpVerified(true)
+      setVerificationToken(String(data?.verificationToken || ''))
+      setOtpSuccess('Email verified successfully. You can now create your account.')
+    } catch (error) {
+      setOtpVerified(false)
+      setVerificationToken('')
+      setOtpError(error?.message || 'OTP verification failed')
+    } finally {
+      setOtpVerifying(false)
+    }
   }
 
   async function onSubmit(event) {
@@ -106,10 +191,10 @@ export function SignupForm() {
         category: form.category,
         country: String(form.country || '').trim(),
         city: String(form.city || '').trim(),
-        termsAccepted: Boolean(form.termsAccepted),
+        verificationToken,
       }
 
-      const data = await apiPost('/api/vendor/signup', payload)
+      const data = await apiPost('/api/auth/vendor-signup', payload)
 
       navigate('/vendor/login', {
         replace: true,
@@ -160,6 +245,41 @@ export function SignupForm() {
           required
           error={fieldError('email')}
         />
+
+        <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
+          <button
+            type="button"
+            className="btn secondary tw-min-h-[40px]"
+            onClick={sendOtp}
+            disabled={otpSending || submitting}
+          >
+            {otpSending ? 'Sending OTP...' : otpVerified ? 'Resend OTP' : 'Send OTP'}
+          </button>
+          <span className="tw-text-xs tw-text-slate-500">We send a 6-digit verification code to your email.</span>
+        </div>
+
+        {otpError ? <div className="alert error">{otpError}</div> : null}
+        {otpSuccess ? <div className="alert">{otpSuccess}</div> : null}
+
+        {otpSent ? (
+          <div className="tw-grid tw-gap-2 tw-rounded-lg tw-border tw-border-slate-200 tw-bg-slate-50 tw-p-3">
+            <p className="tw-text-sm tw-font-semibold tw-text-slate-700">Enter OTP</p>
+            <OTPInput
+              value={otpValue}
+              onChange={setOtpValue}
+              autoFocus
+              disabled={otpVerifying || submitting}
+            />
+            <button
+              type="button"
+              className="btn secondary tw-w-fit tw-min-h-[40px]"
+              onClick={verifyOtp}
+              disabled={otpVerifying || submitting || otpValue.length !== 6}
+            >
+              {otpVerifying ? 'Verifying...' : otpVerified ? 'Verified' : 'Verify OTP'}
+            </button>
+          </div>
+        ) : null}
 
         <InputField
           name="password"
@@ -264,10 +384,14 @@ export function SignupForm() {
       <button
         type="submit"
         className="btn tw-w-full tw-rounded-lg tw-py-3 tw-text-base tw-font-semibold"
-        disabled={!isFormValid || submitting}
+        disabled={!isFormValid || !otpVerified || !verificationToken || submitting}
       >
         {submitting ? 'Creating account...' : 'Create Vendor Account'}
       </button>
+
+      {!otpVerified ? (
+        <p className="tw-text-center tw-text-xs tw-text-slate-500">Please verify your email OTP before creating account.</p>
+      ) : null}
     </form>
   )
 }

@@ -1,4 +1,9 @@
 import {
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
+import {
   Bar,
   BarChart,
   CartesianGrid,
@@ -19,6 +24,43 @@ import {
   normalizeScore,
 } from './dataUtils'
 import { ChartsSection } from './ChartsSection'
+
+function ChartFrame({ children, loadingLabel = 'Preparing chart...' }) {
+  const wrapRef = useRef(null)
+  const [isReady, setIsReady] = useState(false)
+
+  useEffect(() => {
+    const node = wrapRef.current
+    if (!node) return undefined
+
+    const syncSize = () => {
+      const width = Number(node.clientWidth || 0)
+      const height = Number(node.clientHeight || 0)
+      setIsReady(width > 0 && height > 0)
+    }
+
+    syncSize()
+
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(() => syncSize())
+      observer.observe(node)
+      return () => observer.disconnect()
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', syncSize)
+      return () => window.removeEventListener('resize', syncSize)
+    }
+
+    return undefined
+  }, [])
+
+  return (
+    <div className="vdChartWrap" ref={wrapRef}>
+      {isReady ? children : <div className="vdChartEmpty">{loadingLabel}</div>}
+    </div>
+  )
+}
 
 export function AnalyticsPage({ overview, orders = [], feedbacks = [], customers = [] }) {
   const trustTrend = buildTrustTrend(feedbacks)
@@ -72,7 +114,7 @@ export function AnalyticsPage({ overview, orders = [], feedbacks = [], customers
         <div className="vdChartGrid">
           <article className="vdChartCard">
             <h3>Sentiment Mix</h3>
-            <div className="vdChartWrap">
+            <ChartFrame>
               <ResponsiveContainer width="100%" height="100%" minWidth={260} minHeight={220}>
                 <PieChart>
                   <Pie
@@ -92,12 +134,12 @@ export function AnalyticsPage({ overview, orders = [], feedbacks = [], customers
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
-            </div>
+            </ChartFrame>
           </article>
 
           <article className="vdChartCard">
             <h3>Sentiment Count</h3>
-            <div className="vdChartWrap">
+            <ChartFrame>
               <ResponsiveContainer width="100%" height="100%" minWidth={260} minHeight={220}>
                 <BarChart data={sentimentBreakdown}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -111,7 +153,7 @@ export function AnalyticsPage({ overview, orders = [], feedbacks = [], customers
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </ChartFrame>
           </article>
 
           <article className="vdChartCard vdChartCard--wide">
