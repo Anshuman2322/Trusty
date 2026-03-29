@@ -413,19 +413,30 @@ vendorRouter.post('/login', async (req, res, next) => {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      const delivery = await sendVerificationOtpEmail({ toEmail: email, otp: otpCode });
+      let delivery = { delivered: false, reason: 'EMAIL_SEND_SKIPPED' };
+      try {
+        const timeoutMs = 5000;
+        const timeoutPromise = new Promise((resolve) => {
+          setTimeout(() => resolve({ delivered: false, reason: 'EMAIL_TIMEOUT' }), timeoutMs);
+        });
+
+        delivery = await Promise.race([
+          sendVerificationOtpEmail({ toEmail: email, otp: otpCode }),
+          timeoutPromise,
+        ]);
+      } catch (err) {
+        console.error('Email failed:', err.message);
+        delivery = { delivered: false, reason: 'EMAIL_ERROR' };
+      }
+
+      if (delivery?.delivered === false) {
+        console.error('Email failed:', delivery?.reason || 'EMAIL_SEND_FAILED');
+      }
 
       res.json({
         ok: true,
         requiresOtp: true,
-        message:
-          delivery?.delivered === false
-            ? delivery?.reason === 'SMTP_AUTH_FAILED'
-              ? 'OTP generated in backend console (Gmail app password rejected). Enter it to continue login.'
-              : delivery?.reason === 'SMTP_DELIVERY_FAILED'
-                ? 'OTP generated in backend console (email delivery failed). Enter it to continue login.'
-                : 'OTP generated in backend console (email not configured). Enter it to continue login.'
-            : 'OTP sent to your email. Enter it to continue login.',
+        message: 'OTP sent (or fallback)',
       });
       return;
     }
