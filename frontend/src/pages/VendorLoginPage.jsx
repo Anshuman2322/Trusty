@@ -50,7 +50,7 @@ export function VendorLoginPage() {
 
     try {
       setSubmitting(true)
-      const data = await apiPost('/api/vendor/login', {
+      const data = await apiPost('/api/auth/login', {
         email: String(form.email || '').trim(),
         password: form.password,
         ...(otpSent ? { otp: otpValue } : {}),
