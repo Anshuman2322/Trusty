@@ -1,6 +1,6 @@
 import { getToken } from './session'
 
-const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE || 'http://localhost:5000'
+const API_BASE = import.meta.env.VITE_API_URL;
 export { API_BASE }
 
 async function request(path, options = {}) {
