@@ -1,8 +1,8 @@
 import { getToken } from './session'
 
-const API_BASE = import.meta.env.VITE_API_URL;
+const API_BASE = import.meta.env.VITE_API_URL || "https://trusty-tnsg.onrender.com";
+console.log("API_BASE:", API_BASE);
 export { API_BASE }
-
 async function request(path, options = {}) {
   const token = getToken()
   let res
