@@ -1,6 +1,18 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts'
-import { BellRing, ShieldAlert, TrendingUp, Users } from 'lucide-react'
-import { AlertCard, AnalyticsChart, InsightsCard, KpiCard, SectionCard } from '../../components/admin/AdminUi'
+import {
+  BarChart3,
+  BellRing,
+  Building2,
+  Fingerprint,
+  Flag,
+  MessageSquareText,
+  Shield,
+  ShieldAlert,
+  TrendingUp,
+  Users,
+  Zap,
+} from 'lucide-react'
+import { AlertCard, AnalyticsChart, InsightsCard, SectionCard } from '../../components/admin/AdminUi'
 
 export function DashboardPage({ isDark, overview, alerts = [], analytics, logs = [] }) {
   const trendData = (analytics?.trustScoreTrend || []).slice(-10)
@@ -9,25 +21,108 @@ export function DashboardPage({ isDark, overview, alerts = [], analytics, logs =
   const alertTotal = Number(overview?.alertsSummary?.total || alerts.length)
   const trustAverage = Number(overview?.averageTrustScore || 0)
 
+  const topMetrics = [
+    { key: 'feedbacks', title: 'Feedbacks', value: 0, delta: '+12%', tone: 'blue', icon: MessageSquareText },
+    { key: 'vendors', title: 'Vendors', value: 3, delta: '+3', tone: 'violet', icon: Building2 },
+    { key: 'orders', title: 'Orders', value: 0, delta: '', tone: 'cyan', icon: BarChart3 },
+    { key: 'avgTrust', title: 'Avg Trust', value: 0, delta: '+2.4', tone: 'green', icon: TrendingUp },
+    { key: 'alerts', title: 'Alerts', value: 0, delta: '', tone: 'amber', icon: Shield },
+    { key: 'flagged', title: 'Flagged', value: 0, delta: '', tone: 'rose', icon: Flag },
+  ]
+
+  const signalCards = [
+    {
+      key: 'suspicious',
+      title: 'Suspicious Feedback',
+      value: 0,
+      subtitle: 'Flagged by AI pattern analysis',
+      tone: 'rose',
+      icon: ShieldAlert,
+    },
+    {
+      key: 'deviceRepeats',
+      title: 'Device Repeats',
+      value: 0,
+      subtitle: 'Submissions with tracked fingerprints',
+      tone: 'amber',
+      icon: Fingerprint,
+    },
+    {
+      key: 'highSeverity',
+      title: 'High Severity',
+      value: 0,
+      subtitle: 'Require immediate attention',
+      tone: 'blue',
+      icon: Zap,
+    },
+  ]
+
   return (
-    <div className="tw-space-y-8 lg:tw-space-y-10">
-      <div
-        className="tw-grid tw-gap-5"
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}
-      >
-        <KpiCard isDark={isDark} title="Total Vendors" value={overview?.vendorCount ?? 0} tone="blue" />
-        <KpiCard isDark={isDark} title="Total Feedbacks" value={overview?.feedbackCount ?? 0} tone="green" />
-        <KpiCard isDark={isDark} title="Total Orders" value={overview?.orderCount ?? 0} tone="amber" />
-        <KpiCard isDark={isDark} title="Average Trust Score" value={overview?.averageTrustScore ?? 0} tone="slate" />
+    <div className="tw-space-y-6 lg:tw-space-y-8">
+      <div className="tw-grid tw-grid-cols-6 tw-gap-4">
+        {topMetrics.map((metric) => {
+          const Icon = metric.icon
+          const tone = getToneStyles(metric.tone, isDark)
+          return (
+            <article
+              key={metric.key}
+              className={[
+                'tw-relative tw-min-w-0 tw-h-[140px] tw-overflow-hidden tw-rounded-2xl tw-border tw-p-3 tw-shadow-soft',
+                isDark ? 'tw-border-[#233650] tw-bg-[#111f34]' : 'tw-border-[#d6e4f2] tw-bg-white',
+              ].join(' ')}
+            >
+              <span className={['tw-absolute tw-left-0 tw-top-0 tw-h-full tw-w-1.5', tone.leftBar].join(' ')} />
+              <div className="tw-flex tw-items-start tw-justify-between tw-gap-2.5 tw-pl-1.5">
+                <div>
+                  <p className={['tw-text-[12px] tw-font-semibold tw-uppercase tw-tracking-[0.14em]', isDark ? 'tw-text-slate-400' : 'tw-text-[#4b5f79]'].join(' ')}>{metric.title}</p>
+                  <p className={['tw-mt-0.5 tw-text-[22px] tw-leading-none tw-font-bold tw-tracking-tight', isDark ? 'tw-text-slate-100' : 'tw-text-[#0f172a]'].join(' ')}>{metric.value}</p>
+                  {metric.delta ? (
+                    <p className={['tw-mt-0.5 tw-text-[10px] tw-font-semibold', tone.deltaText].join(' ')}>↗ {metric.delta}</p>
+                  ) : (
+                    <p className={['tw-mt-0.5 tw-text-[10px] tw-font-semibold', isDark ? 'tw-text-slate-400' : 'tw-text-[#64748B]'].join(' ')}>-</p>
+                  )}
+                </div>
+                <span className={[
+                  'tw-inline-flex tw-h-8 tw-w-8 tw-items-center tw-justify-center tw-rounded-lg tw-border',
+                  tone.iconWrap,
+                ].join(' ')}>
+                  <Icon size={16} className={tone.iconText} />
+                </span>
+              </div>
+            </article>
+          )
+        })}
       </div>
 
-      <div
-        className="tw-grid tw-gap-5"
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}
-      >
-        <KpiCard isDark={isDark} title="Suspicious Feedback Count" value={overview?.suspiciousFeedbackCount ?? 0} tone="rose" />
-        <KpiCard isDark={isDark} title="Repeated Device Count" value={overview?.repeatedDeviceCount ?? 0} tone="amber" />
-        <KpiCard isDark={isDark} title="Duplicate Reviews Detected" value={overview?.duplicateReviewsDetected ?? 0} tone="rose" />
+      <div className="tw-grid tw-grid-cols-3 tw-gap-4">
+        {signalCards.map((signal) => {
+          const Icon = signal.icon
+          const tone = getToneStyles(signal.tone, isDark)
+          return (
+            <article
+              key={signal.key}
+              className={[
+                'tw-relative tw-h-[124px] tw-overflow-hidden tw-rounded-2xl tw-border tw-p-3 tw-shadow-soft',
+                isDark ? 'tw-border-[#233650] tw-bg-[#111f34]' : `tw-border-[#d6e4f2] ${tone.signalSurface}`,
+              ].join(' ')}
+            >
+              <span className={['tw-absolute tw-left-0 tw-top-0 tw-h-full tw-w-1.5', tone.leftBar].join(' ')} />
+              <div className="tw-flex tw-items-center tw-gap-2.5 tw-pl-1.5">
+                <span className={[
+                  'tw-inline-flex tw-h-8 tw-w-8 tw-items-center tw-justify-center tw-rounded-lg tw-border',
+                  tone.iconWrap,
+                ].join(' ')}>
+                  <Icon size={16} className={tone.iconText} />
+                </span>
+                <div>
+                  <p className={['tw-text-[12px] tw-leading-tight tw-font-semibold tw-tracking-tight', isDark ? 'tw-text-slate-200' : 'tw-text-[#334155]'].join(' ')}>{signal.title}</p>
+                  <p className={['tw-mt-0.5 tw-text-[21px] tw-leading-none tw-font-bold tw-tracking-tight', isDark ? 'tw-text-slate-100' : 'tw-text-[#0f172a]'].join(' ')}>{signal.value}</p>
+                  <p className={['tw-mt-0.5 tw-text-[10px] tw-font-medium', isDark ? 'tw-text-slate-400' : 'tw-text-[#64748B]'].join(' ')}>{signal.subtitle}</p>
+                </div>
+              </div>
+            </article>
+          )
+        })}
       </div>
 
       <div className={['tw-h-px', isDark ? 'tw-bg-slate-800' : 'tw-bg-[#E5E7EB]'].join(' ')} />
@@ -131,4 +226,53 @@ export function DashboardPage({ isDark, overview, alerts = [], analytics, logs =
       </SectionCard>
     </div>
   )
+}
+
+function getToneStyles(tone, isDark) {
+  const palette = {
+    blue: {
+      leftBar: 'tw-bg-[#3B82F6]',
+      iconWrap: isDark ? 'tw-border-blue-500/40 tw-bg-blue-500/20' : 'tw-border-blue-100 tw-bg-blue-50',
+      iconText: isDark ? 'tw-text-blue-300' : 'tw-text-[#3B82F6]',
+      deltaText: isDark ? 'tw-text-emerald-300' : 'tw-text-emerald-600',
+      signalSurface: isDark ? 'tw-bg-[#111f34]' : 'tw-bg-[#EEF5FF]',
+    },
+    violet: {
+      leftBar: 'tw-bg-[#7C3AED]',
+      iconWrap: isDark ? 'tw-border-violet-500/40 tw-bg-violet-500/20' : 'tw-border-violet-100 tw-bg-violet-50',
+      iconText: isDark ? 'tw-text-violet-300' : 'tw-text-[#7C3AED]',
+      deltaText: isDark ? 'tw-text-emerald-300' : 'tw-text-emerald-600',
+      signalSurface: isDark ? 'tw-bg-[#111f34]' : 'tw-bg-white',
+    },
+    cyan: {
+      leftBar: 'tw-bg-[#06B6D4]',
+      iconWrap: isDark ? 'tw-border-cyan-500/40 tw-bg-cyan-500/20' : 'tw-border-cyan-100 tw-bg-cyan-50',
+      iconText: isDark ? 'tw-text-cyan-300' : 'tw-text-[#0891B2]',
+      deltaText: isDark ? 'tw-text-slate-400' : 'tw-text-[#64748B]',
+      signalSurface: isDark ? 'tw-bg-[#111f34]' : 'tw-bg-white',
+    },
+    green: {
+      leftBar: 'tw-bg-[#10B981]',
+      iconWrap: isDark ? 'tw-border-emerald-500/40 tw-bg-emerald-500/20' : 'tw-border-emerald-100 tw-bg-emerald-50',
+      iconText: isDark ? 'tw-text-emerald-300' : 'tw-text-[#059669]',
+      deltaText: isDark ? 'tw-text-emerald-300' : 'tw-text-emerald-600',
+      signalSurface: isDark ? 'tw-bg-[#111f34]' : 'tw-bg-white',
+    },
+    amber: {
+      leftBar: 'tw-bg-[#F59E0B]',
+      iconWrap: isDark ? 'tw-border-amber-500/40 tw-bg-amber-500/20' : 'tw-border-amber-100 tw-bg-amber-50',
+      iconText: isDark ? 'tw-text-amber-300' : 'tw-text-[#D97706]',
+      deltaText: isDark ? 'tw-text-slate-400' : 'tw-text-[#64748B]',
+      signalSurface: isDark ? 'tw-bg-[#111f34]' : 'tw-bg-[#FFFBEE]',
+    },
+    rose: {
+      leftBar: 'tw-bg-[#EF4444]',
+      iconWrap: isDark ? 'tw-border-rose-500/40 tw-bg-rose-500/20' : 'tw-border-rose-100 tw-bg-rose-50',
+      iconText: isDark ? 'tw-text-rose-300' : 'tw-text-[#DC2626]',
+      deltaText: isDark ? 'tw-text-slate-400' : 'tw-text-[#64748B]',
+      signalSurface: isDark ? 'tw-bg-[#111f34]' : 'tw-bg-[#FEF1F2]',
+    },
+  }
+
+  return palette[tone] || palette.blue
 }

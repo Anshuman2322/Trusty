@@ -85,6 +85,7 @@ export function AdminDashboard() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '', otp: '' })
   const [otpRequired, setOtpRequired] = useState(false)
   const [authHint, setAuthHint] = useState('')
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
 
   const notificationCount = useMemo(
     () => alerts.filter((item) => item.severity === 'HIGH' || item.severity === 'MEDIUM').length,
@@ -171,9 +172,22 @@ export function AdminDashboard() {
     setActiveSection('dashboard')
   }
 
+  function requestLogout() {
+    setLogoutConfirmOpen(true)
+  }
+
+  function cancelLogout() {
+    setLogoutConfirmOpen(false)
+  }
+
+  function confirmLogout() {
+    setLogoutConfirmOpen(false)
+    onLogout()
+  }
+
   function changeSection(next) {
     if (next === 'logout') {
-      onLogout()
+      requestLogout()
       return
     }
     setActiveSection(next)
@@ -485,7 +499,7 @@ export function AdminDashboard() {
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
         onToggleMobile={() => setMobileOpen((prev) => !prev)}
         onCloseMobile={() => setMobileOpen(false)}
-        onLogout={onLogout}
+        onLogout={requestLogout}
       >
         {error ? (
           <div
@@ -580,6 +594,22 @@ export function AdminDashboard() {
         loading={actionBusy}
         onCancel={() => setModalState((prev) => ({ ...prev, open: false }))}
         onConfirm={onConfirmModalAction}
+      />
+
+      <ConfirmationModal
+        isDark={isDark}
+        open={logoutConfirmOpen}
+        title="Log out of Admin Workspace?"
+        description="You are about to end this secure admin session on this device."
+        bullets={[
+          'You will need to verify email, password, and OTP to sign in again.',
+          'Any unsaved dashboard changes will be lost.',
+        ]}
+        confirmText="Yes, Log Out"
+        cancelText="Stay Logged In"
+        danger
+        onCancel={cancelLogout}
+        onConfirm={confirmLogout}
       />
     </>
   )

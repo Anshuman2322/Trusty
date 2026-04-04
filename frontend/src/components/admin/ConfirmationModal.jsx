@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 export function ConfirmationModal({
   isDark = false,
   open,
@@ -11,18 +13,30 @@ export function ConfirmationModal({
   onConfirm,
   onCancel,
 }) {
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') return undefined
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onCancel?.()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, onCancel])
+
   if (!open) return null
 
   return (
     <div className={[
-      'tw-fixed tw-inset-0 tw-z-[70] tw-flex tw-items-center tw-justify-center tw-p-4',
+      'tw-fixed tw-inset-0 tw-z-[70] tw-flex tw-items-center tw-justify-center tw-p-4 tw-backdrop-blur-md',
       isDark ? 'tw-bg-slate-950/70' : 'tw-bg-slate-950/50',
-    ].join(' ')}>
+    ].join(' ')} onClick={onCancel}>
       <div
         className={[
           'tw-w-full tw-max-w-xl tw-rounded-2xl tw-shadow-2xl tw-ring-1',
           isDark ? 'tw-bg-slate-900 tw-ring-slate-700' : 'tw-bg-white tw-ring-slate-200',
         ].join(' ')}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className={['tw-border-b tw-px-6 tw-py-4', isDark ? 'tw-border-slate-700' : 'tw-border-slate-200'].join(' ')}>
           <h3 className={['tw-text-lg tw-font-semibold', isDark ? 'tw-text-slate-100' : 'tw-text-slate-900'].join(' ')}>{title}</h3>
