@@ -73,7 +73,7 @@ function formatDate(iso) {
 
 function formatLocationText(location) {
   if (!location) return 'Location unavailable'
-  const parts = [location.city, location.state, location.country || location.countryCode]
+  const parts = [location.area, location.city, location.state, location.country || location.countryCode]
     .map((value) => String(value || '').trim())
     .filter(Boolean)
   return parts.length ? parts.join(', ') : 'Location unavailable'
@@ -81,6 +81,7 @@ function formatLocationText(location) {
 
 function formatFeedbackLocation(feedback) {
   return formatLocationText({
+    area: feedback?.ipArea,
     city: feedback?.ipCity,
     state: feedback?.ipState || feedback?.ipRegion,
     country: feedback?.ipCountryName || feedback?.ipCountry,

@@ -90,6 +90,7 @@ const FeedbackSchema = new mongoose.Schema(
     ipCountryName: { type: String },
     ipRegion: { type: String },
     ipState: { type: String },
+    ipArea: { type: String },
     ipCity: { type: String },
     ipTimezone: { type: String },
     locationSource: { type: String, default: 'unknown' },

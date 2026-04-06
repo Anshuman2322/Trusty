@@ -84,6 +84,7 @@ function sanitizeFeedbackForPublic(feedback, rules) {
     delete item.ipCountryName;
     delete item.ipRegion;
     delete item.ipState;
+    delete item.ipArea;
     delete item.ipCity;
     delete item.ipTimezone;
     delete item.locationSource;

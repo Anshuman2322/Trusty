@@ -110,6 +110,68 @@ function normalizeServiceHighlights(rawHighlights = {}) {
   };
 }
 
+function normalizeLocationText(value, maxLength = 120) {
+  const text = String(value || '').trim();
+  if (!text) return undefined;
+  return text.slice(0, maxLength);
+}
+
+function normalizeClientLocation(rawLocation = {}) {
+  const source =
+    rawLocation && typeof rawLocation === 'object' && !Array.isArray(rawLocation)
+      ? rawLocation
+      : {};
+
+  const area = normalizeLocationText(
+    source.area || source.locality || source.neighborhood || source.neighbourhood,
+    120
+  );
+  const city = normalizeLocationText(source.city || source.town || source.village, 120);
+  const state = normalizeLocationText(source.state || source.region || source.province, 120);
+  const country = normalizeLocationText(source.country, 120);
+  const countryCodeRaw = normalizeLocationText(source.countryCode || source.country_code, 8);
+  const countryCode = countryCodeRaw ? countryCodeRaw.toUpperCase() : undefined;
+  const timezone = normalizeLocationText(source.timezone, 80);
+  const sourceTag = normalizeLocationText(source.source, 80);
+
+  const hasAny = Boolean(area || city || state || country || countryCode || timezone);
+  if (!hasAny) return null;
+
+  return {
+    area,
+    city,
+    state,
+    country,
+    countryCode,
+    timezone,
+    source: sourceTag,
+  };
+}
+
+function mergeFeedbackLocation(ipMeta, clientLocation) {
+  const stateFromIp = ipMeta?.ipState || ipMeta?.ipRegion;
+
+  const area = clientLocation?.area || null;
+  const city = clientLocation?.city || ipMeta?.ipCity || null;
+  const state = clientLocation?.state || stateFromIp || null;
+  const countryCode = clientLocation?.countryCode || ipMeta?.ipCountry || null;
+  const countryName = clientLocation?.country || ipMeta?.ipCountryName || null;
+  const timezone = clientLocation?.timezone || ipMeta?.ipTimezone || null;
+  const locationSource = clientLocation
+    ? `client_${clientLocation.source || 'geolocation'}${ipMeta?.locationSource ? `+${ipMeta.locationSource}` : ''}`
+    : ipMeta?.locationSource || 'unknown';
+
+  return {
+    area,
+    city,
+    state,
+    countryCode,
+    countryName,
+    timezone,
+    locationSource,
+  };
+}
+
 async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
   const vendor = await Vendor.findById(vendorId);
   if (!vendor) throw httpError(404, 'Vendor not found', 'VENDOR_NOT_FOUND');
@@ -128,6 +190,8 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
   const sessionIdRaw = String(payload?.sessionId || payload?.behavior?.sessionId || '').trim();
   const sessionIdHash = sessionIdRaw ? sha256Hex(sessionIdRaw) : undefined;
   const ipMeta = await inspectClientIp(requestMeta?.clientIp, { headers: requestMeta?.headers });
+  const clientLocation = normalizeClientLocation(payload?.clientLocation);
+  const mergedLocation = mergeFeedbackLocation(ipMeta, clientLocation);
 
   // Privacy-safe device fingerprint hash. Do NOT collect IP/GPS/hardware IDs.
   const deviceHash = String(payload?.deviceHash || '').trim();
@@ -400,13 +464,14 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
     deviceFingerprintHash,
     sessionIdHash,
     ipHash: ipMeta.ipHash,
-    ipCountry: ipMeta.ipCountry,
-    ipCountryName: ipMeta.ipCountryName,
-    ipRegion: ipMeta.ipRegion,
-    ipState: ipMeta.ipState,
-    ipCity: ipMeta.ipCity,
-    ipTimezone: ipMeta.ipTimezone,
-    locationSource: ipMeta.locationSource,
+    ipCountry: mergedLocation.countryCode,
+    ipCountryName: mergedLocation.countryName,
+    ipRegion: mergedLocation.state,
+    ipState: mergedLocation.state,
+    ipArea: mergedLocation.area,
+    ipCity: mergedLocation.city,
+    ipTimezone: mergedLocation.timezone,
+    locationSource: mergedLocation.locationSource,
     ipRiskLevel: ipPattern.riskLevel,
     typingTimeMs,
     editCount,
@@ -444,10 +509,11 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
     trustLevel,
     trustBreakdown,
     ipHash: ipMeta.ipHash,
-    ipCountry: ipMeta.ipCountry,
-    ipCountryName: ipMeta.ipCountryName,
-    ipState: ipMeta.ipState,
-    ipCity: ipMeta.ipCity,
+    ipCountry: mergedLocation.countryCode,
+    ipCountryName: mergedLocation.countryName,
+    ipArea: mergedLocation.area,
+    ipState: mergedLocation.state,
+    ipCity: mergedLocation.city,
     ipRiskLevel: ipPattern.riskLevel,
     ipNetworkType: ipMeta.networkType,
     ipFraudScore: ipMeta.fraudScore,
@@ -479,17 +545,19 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
     trustBreakdown,
     trustBreakdownList: trustBreakdownToLegacyList(trustBreakdown),
     location: {
-      countryCode: ipMeta.ipCountry,
-      country: ipMeta.ipCountryName,
-      state: ipMeta.ipState || ipMeta.ipRegion,
-      city: ipMeta.ipCity,
-      timezone: ipMeta.ipTimezone,
-      source: ipMeta.locationSource,
+      countryCode: mergedLocation.countryCode,
+      country: mergedLocation.countryName,
+      area: mergedLocation.area,
+      state: mergedLocation.state,
+      city: mergedLocation.city,
+      timezone: mergedLocation.timezone,
+      source: mergedLocation.locationSource,
     },
-    ipCountry: ipMeta.ipCountry,
-    ipCountryName: ipMeta.ipCountryName,
-    ipState: ipMeta.ipState,
-    ipCity: ipMeta.ipCity,
+    ipCountry: mergedLocation.countryCode,
+    ipCountryName: mergedLocation.countryName,
+    ipArea: mergedLocation.area,
+    ipState: mergedLocation.state,
+    ipCity: mergedLocation.city,
     ipRiskLevel: ipPattern.riskLevel,
     dupAdj,
     dupReason,

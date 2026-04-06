@@ -7,6 +7,7 @@ import { getDeviceFingerprintHash, getOrCreateSessionId } from '../lib/device'
 
 const MAX_FEEDBACK_CHARS = 500
 const MIN_FEEDBACK_CHARS = 20
+const GEOLOCATION_TIMEOUT_MS = 4500
 
 function formatTrustLevel(level) {
   if (!level) return '—'
@@ -402,10 +403,102 @@ function FeedbackPanelIcon({ kind }) {
 
 function formatLocationText(location) {
   if (!location) return 'Location unavailable'
-  const parts = [location.city, location.state, location.country || location.countryCode]
+  const parts = [location.area, location.city, location.state, location.country || location.countryCode]
     .map((value) => String(value || '').trim())
     .filter(Boolean)
   return parts.length ? parts.join(', ') : 'Location unavailable'
+}
+
+function normalizeLocationPieces(parts) {
+  const seen = new Set()
+  const normalized = []
+  parts.forEach((part) => {
+    const value = String(part || '').trim()
+    if (!value) return
+    const key = value.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    normalized.push(value)
+  })
+  return normalized
+}
+
+function getCurrentPositionWithTimeout(timeoutMs = GEOLOCATION_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      reject(new Error('Geolocation not available'))
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: false,
+      timeout: timeoutMs,
+      maximumAge: 10 * 60 * 1000,
+    })
+  })
+}
+
+function parseReverseGeocodeAddress(address) {
+  const source = address && typeof address === 'object' && !Array.isArray(address) ? address : {}
+
+  return {
+    area:
+      String(
+        source.suburb ||
+          source.neighbourhood ||
+          source.neighborhood ||
+          source.city_district ||
+          source.county ||
+          source.township ||
+          ''
+      ).trim() || undefined,
+    city: String(source.city || source.town || source.village || source.municipality || '').trim() || undefined,
+    state: String(source.state || source.region || source.state_district || '').trim() || undefined,
+    country: String(source.country || '').trim() || undefined,
+    countryCode: String(source.country_code || '').trim().toUpperCase() || undefined,
+  }
+}
+
+async function fetchClientLocationSnapshot() {
+  try {
+    const position = await getCurrentPositionWithTimeout(GEOLOCATION_TIMEOUT_MS)
+    const latitude = Number(position?.coords?.latitude)
+    const longitude = Number(position?.coords?.longitude)
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+
+    const url =
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2` +
+      `&lat=${encodeURIComponent(latitude)}` +
+      `&lon=${encodeURIComponent(longitude)}` +
+      `&zoom=18&addressdetails=1`
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    })
+
+    if (!response.ok) {
+      return {
+        latitude,
+        longitude,
+        source: 'browser_geolocation_coords',
+      }
+    }
+
+    const payload = await response.json()
+    const parsed = parseReverseGeocodeAddress(payload?.address)
+
+    return {
+      ...parsed,
+      latitude,
+      longitude,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
+      source: 'browser_geolocation_reverse',
+    }
+  } catch {
+    return null
+  }
 }
 
 function normalizeWebsiteHref(value) {
@@ -699,6 +792,8 @@ export function PublicView({ vendors, defaultVendorId }) {
         typingIntervalVarianceMs2 = varianceSum / typingIntervalsCount
       }
 
+      const clientLocation = await fetchClientLocationSnapshot()
+
       const body = {
         text: trimmed,
         rating,
@@ -716,6 +811,7 @@ export function PublicView({ vendors, defaultVendorId }) {
           typingIntervalVarianceMs2,
         },
         notReceived,
+        clientLocation,
       }
 
       const data = await apiPost(`/api/public/vendor/${vendorId}/feedbacks`, body)
@@ -1149,13 +1245,14 @@ export function PublicView({ vendors, defaultVendorId }) {
                 const reviewRatingText = reviewRating != null ? `${reviewRating.toFixed(1)} / 5` : ''
                 const reviewDisplayName = String(f?.displayName || '').trim() || 'Anonymous Reviewer'
                 const reviewDisplayLocation = (() => {
+                  const area = String(f?.ipArea || '').trim()
                   const city = String(f?.ipCity || '').trim()
-                  const area = String(f?.ipState || f?.ipRegion || '').trim()
+                  const state = String(f?.ipState || f?.ipRegion || '').trim()
                   const country =
                     String(f?.displayCountry || '').trim() ||
                     String(f?.ipCountryName || '').trim()
 
-                  const composed = [city, area, country].filter(Boolean).join(', ')
+                  const composed = normalizeLocationPieces([area, city, state, country]).join(', ')
                   return composed || 'Location not shared'
                 })()
                 const reviewProductName = String(f?.productName || '').trim()
