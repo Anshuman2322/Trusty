@@ -1148,10 +1148,16 @@ export function PublicView({ vendors, defaultVendorId }) {
                 const reviewRating = clampStarRating(f.rating) ?? deriveRatingFromTrustScore(f.trustScore)
                 const reviewRatingText = reviewRating != null ? `${reviewRating.toFixed(1)} / 5` : ''
                 const reviewDisplayName = String(f?.displayName || '').trim() || 'Anonymous Reviewer'
-                const reviewDisplayCountry =
-                  String(f?.displayCountry || '').trim() ||
-                  String(f?.ipCountryName || '').trim() ||
-                  'Location not shared'
+                const reviewDisplayLocation = (() => {
+                  const city = String(f?.ipCity || '').trim()
+                  const area = String(f?.ipState || f?.ipRegion || '').trim()
+                  const country =
+                    String(f?.displayCountry || '').trim() ||
+                    String(f?.ipCountryName || '').trim()
+
+                  const composed = [city, area, country].filter(Boolean).join(', ')
+                  return composed || 'Location not shared'
+                })()
                 const reviewProductName = String(f?.productName || '').trim()
                 const reviewInitial = String(reviewDisplayName || 'R').trim().charAt(0).toUpperCase() || 'R'
                 const highlightsSource =
@@ -1204,7 +1210,7 @@ export function PublicView({ vendors, defaultVendorId }) {
                             <div className="publicReviewIdentityLine">
                               <strong>{reviewDisplayName}</strong>
                               <span className="publicReviewIdentityDivider">|</span>
-                              <span>{reviewDisplayCountry}</span>
+                              <span>{reviewDisplayLocation}</span>
                             </div>
 
                             {reviewRating ? (
