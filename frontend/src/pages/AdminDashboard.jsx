@@ -82,8 +82,7 @@ export function AdminDashboard() {
     bullets: [],
   })
 
-  const [loginForm, setLoginForm] = useState({ email: '', password: '', otp: '' })
-  const [otpRequired, setOtpRequired] = useState(false)
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
   const [authHint, setAuthHint] = useState('')
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
 
@@ -141,11 +140,6 @@ export function AdminDashboard() {
       setError('')
       setAuthHint('')
       const data = await apiPost('/api/auth/login', loginForm)
-      if (data?.requiresOtp) {
-        setOtpRequired(true)
-        setAuthHint(data?.message || 'OTP sent to your email. Enter it to continue login.')
-        return
-      }
       setSession({ token: data.token, user: data.user })
       setSessionState({ token: data.token, user: data.user })
     } catch (e) {
@@ -506,7 +500,7 @@ export function AdminDashboard() {
               ].join(' ')}
               value={loginForm.email}
               onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))}
-              placeholder="trustylens@gmail.com"
+              placeholder="Enter your email"
             />
           </label>
 
@@ -522,32 +516,15 @@ export function AdminDashboard() {
               ].join(' ')}
               value={loginForm.password}
               onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))}
-              placeholder="Anshu@2322"
+              placeholder="Enter your password"
             />
           </label>
-
-          {otpRequired ? (
-            <label className={['tw-block tw-text-sm tw-font-medium', isDark ? 'tw-text-slate-200' : 'tw-text-slate-700'].join(' ')}>
-              Gmail OTP
-              <input
-                className={[
-                  'tw-mt-1 tw-w-full tw-rounded-xl tw-border tw-px-3 tw-py-2 tw-outline-none tw-ring-offset-0 focus:tw-ring-2',
-                  isDark
-                    ? 'tw-border-slate-700 tw-bg-slate-800 tw-text-slate-100 focus:tw-ring-sky-900'
-                    : 'tw-border-slate-300 tw-bg-white tw-text-slate-900 focus:tw-ring-sky-100',
-                ].join(' ')}
-                value={loginForm.otp}
-                onChange={(event) => setLoginForm((prev) => ({ ...prev, otp: event.target.value }))}
-                placeholder="Enter 6-digit OTP"
-              />
-            </label>
-          ) : null}
 
           <button
             type="submit"
             className="tw-w-full tw-rounded-xl tw-bg-slate-900 tw-px-3 tw-py-2 tw-text-sm tw-font-semibold tw-text-white hover:tw-bg-slate-800"
           >
-            {otpRequired ? 'Verify OTP & Login' : 'Send OTP'}
+            Login
           </button>
         </form>
       </div>
@@ -698,7 +675,7 @@ export function AdminDashboard() {
         title="Log out of Admin Workspace?"
         description="You are about to end this secure admin session on this device."
         bullets={[
-          'You will need to verify email, password, and OTP to sign in again.',
+          'You will need to enter your email and password to sign in again.',
           'Any unsaved dashboard changes will be lost.',
         ]}
         confirmText="Yes, Log Out"

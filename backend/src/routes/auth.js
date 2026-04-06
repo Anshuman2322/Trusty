@@ -288,7 +288,6 @@ authRouter.post('/login', async (req, res, next) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
-    const otpInput = String(req.body?.otp || '').trim();
     if (!email || !password) throw httpError(400, 'email and password are required', 'VALIDATION');
 
     const user = await withMongoReadRetry('auth login user lookup', async () => User.findOne({ email }).lean());
@@ -296,68 +295,6 @@ authRouter.post('/login', async (req, res, next) => {
 
     const ok = await verifyPassword(password, user.passwordHash);
     if (!ok) throw httpError(401, 'Invalid credentials', 'AUTH');
-
-    if (user.role === 'ADMIN') {
-      if (!otpInput) {
-        const otpCode = generateOtpCode();
-        const otpHash = hashOtp(email, otpCode);
-        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-        await OTP.findOneAndUpdate(
-          { email, purpose: OTP_PURPOSES.ADMIN_LOGIN },
-          {
-            $set: {
-              otp: otpHash,
-              attemptsLeft: 3,
-              expiresAt,
-            },
-          },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
-
-        const delivery = await sendVerificationOtpEmail({ toEmail: email, otp: otpCode });
-
-        res.json({
-          ok: true,
-          requiresOtp: true,
-          message:
-            delivery?.delivered === false
-              ? delivery?.reason === 'SMTP_AUTH_FAILED'
-                ? 'OTP generated in backend console (Gmail app password rejected). Enter it to continue login.'
-                : delivery?.reason === 'SMTP_DELIVERY_FAILED'
-                  ? 'OTP generated in backend console (email delivery failed). Enter it to continue login.'
-                  : 'OTP generated in backend console (email not configured). Enter it to continue login.'
-              : 'OTP sent to your Gmail. Enter it to continue admin login.',
-        });
-        return;
-      }
-
-      const otpDoc = await OTP.findOne({ email, purpose: OTP_PURPOSES.ADMIN_LOGIN });
-      if (!otpDoc) throw httpError(400, 'Invalid OTP. Please request a new code.', 'OTP_INVALID');
-
-      if (new Date(otpDoc.expiresAt).getTime() <= Date.now()) {
-        await OTP.deleteOne({ _id: otpDoc._id });
-        throw httpError(400, 'OTP expired. Please request a new code.', 'OTP_EXPIRED');
-      }
-
-      if (Number(otpDoc.attemptsLeft || 0) <= 0) {
-        await OTP.deleteOne({ _id: otpDoc._id });
-        throw httpError(429, 'OTP attempt limit exceeded. Please request a new code.', 'OTP_ATTEMPTS_EXCEEDED');
-      }
-
-      const incomingHash = hashOtp(email, otpInput);
-      if (incomingHash !== String(otpDoc.otp || '')) {
-        otpDoc.attemptsLeft = Math.max(0, Number(otpDoc.attemptsLeft || 0) - 1);
-        if (otpDoc.attemptsLeft <= 0) {
-          await OTP.deleteOne({ _id: otpDoc._id });
-        } else {
-          await otpDoc.save();
-        }
-        throw httpError(400, 'Invalid OTP', 'OTP_INVALID');
-      }
-
-      await OTP.deleteOne({ _id: otpDoc._id });
-    }
 
     const token = signToken({
       userId: String(user._id),
