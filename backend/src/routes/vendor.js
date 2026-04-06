@@ -57,6 +57,17 @@ const VENDOR_SETTINGS_DEFAULTS = {
     paymentUpdateAlert: true,
     deliveryUpdateAlert: true,
     emailNotifications: true,
+    weeklyReportEmail: false,
+    newFeedbackPush: false,
+    riskAlertsPush: true,
+  },
+  security: {
+    twoFactorAuthEnabled: false,
+  },
+  privacy: {
+    showEmailPublicly: false,
+    showPhonePublicly: false,
+    allowUsageAnalytics: true,
   },
   system: {
     darkMode: false,
@@ -84,6 +95,7 @@ const VENDOR_PROFILE_VISIBILITY_DEFAULTS = {
   phoneNumber: false,
   supportEmail: false,
   description: false,
+  additionalInfo: false,
   trustScore: true,
 };
 
@@ -151,6 +163,7 @@ function normalizeProfileVisibility(rawVisibility = {}) {
     phoneNumber: coerceBoolean(source.phoneNumber, VENDOR_PROFILE_VISIBILITY_DEFAULTS.phoneNumber),
     supportEmail: coerceBoolean(source.supportEmail, VENDOR_PROFILE_VISIBILITY_DEFAULTS.supportEmail),
     description: coerceBoolean(source.description, VENDOR_PROFILE_VISIBILITY_DEFAULTS.description),
+    additionalInfo: coerceBoolean(source.additionalInfo, VENDOR_PROFILE_VISIBILITY_DEFAULTS.additionalInfo),
     trustScore: coerceBoolean(source.trustScore, VENDOR_PROFILE_VISIBILITY_DEFAULTS.trustScore),
   };
 }
@@ -161,6 +174,8 @@ function normalizeVendorSettings(rawSettings = {}) {
   const feedback = rawSettings?.feedback || {};
   const trustFraud = rawSettings?.trustFraud || {};
   const notifications = rawSettings?.notifications || {};
+  const security = rawSettings?.security || {};
+  const privacy = rawSettings?.privacy || {};
   const system = rawSettings?.system || {};
   const advanced = rawSettings?.advanced || {};
 
@@ -224,6 +239,38 @@ function normalizeVendorSettings(rawSettings = {}) {
       emailNotifications: coerceBoolean(
         notifications.emailNotifications,
         defaults.notifications.emailNotifications
+      ),
+      weeklyReportEmail: coerceBoolean(
+        notifications.weeklyReportEmail,
+        defaults.notifications.weeklyReportEmail
+      ),
+      newFeedbackPush: coerceBoolean(
+        notifications.newFeedbackPush,
+        defaults.notifications.newFeedbackPush
+      ),
+      riskAlertsPush: coerceBoolean(
+        notifications.riskAlertsPush,
+        defaults.notifications.riskAlertsPush
+      ),
+    },
+    security: {
+      twoFactorAuthEnabled: coerceBoolean(
+        security.twoFactorAuthEnabled,
+        defaults.security.twoFactorAuthEnabled
+      ),
+    },
+    privacy: {
+      showEmailPublicly: coerceBoolean(
+        privacy.showEmailPublicly,
+        defaults.privacy.showEmailPublicly
+      ),
+      showPhonePublicly: coerceBoolean(
+        privacy.showPhonePublicly,
+        defaults.privacy.showPhonePublicly
+      ),
+      allowUsageAnalytics: coerceBoolean(
+        privacy.allowUsageAnalytics,
+        defaults.privacy.allowUsageAnalytics
       ),
     },
     system: {
@@ -314,10 +361,26 @@ function isValidWebsite(value) {
   }
 }
 
+function isValidLogoDataUrl(value) {
+  const text = String(value || '').trim();
+  if (!text) return true;
+  return /^data:image\/(png|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/i.test(text);
+}
+
+function estimateDataUrlBytes(value) {
+  const text = String(value || '').trim();
+  const commaIndex = text.indexOf(',');
+  if (commaIndex < 0) return 0;
+  const base64Payload = text.slice(commaIndex + 1).replace(/\s+/g, '');
+  const padding = base64Payload.endsWith('==') ? 2 : base64Payload.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((base64Payload.length * 3) / 4) - padding);
+}
+
 function buildVendorProfilePayload(vendor, trustScore = null) {
   return {
     businessName: String(vendor?.name || ''),
     businessEmail: String(vendor?.email || ''),
+    businessLogo: String(vendor?.businessLogo || ''),
     businessCategory: normalizeCategoryForProfileView(vendor?.category),
     businessWebsite: String(vendor?.website || ''),
     businessId: String(vendor?.gstBusinessId || ''),
@@ -328,6 +391,8 @@ function buildVendorProfilePayload(vendor, trustScore = null) {
     phoneNumber: String(vendor?.phone || ''),
     supportEmail: String(vendor?.supportEmail || vendor?.contactEmail || ''),
     description: String(vendor?.description || ''),
+    additionalInfoHeading: String(vendor?.additionalInfoHeading || ''),
+    additionalInfoResult: String(vendor?.additionalInfoResult || ''),
     publicVisibility: normalizeProfileVisibility(vendor?.profileVisibility || {}),
     trustScore: Number.isFinite(Number(trustScore)) ? Math.max(0, Math.min(100, Math.round(Number(trustScore)))) : null,
   };
@@ -574,6 +639,7 @@ vendorRouter.post('/:vendorId/profile', async (req, res, next) => {
     const businessName = String(req.body?.businessName || '').trim();
     const businessEmail = normalizeEmail(req.body?.businessEmail);
     const businessCategory = String(req.body?.businessCategory || '').trim();
+    const businessLogo = String(req.body?.businessLogo || '').trim();
     const country = String(req.body?.country || '').trim();
     const state = String(req.body?.state || '').trim();
     const city = String(req.body?.city || '').trim();
@@ -581,6 +647,8 @@ vendorRouter.post('/:vendorId/profile', async (req, res, next) => {
     const phoneNumber = sanitizePhone(req.body?.phoneNumber);
     const supportEmail = normalizeEmail(req.body?.supportEmail);
     const description = String(req.body?.description || '').trim();
+    const additionalInfoHeading = String(req.body?.additionalInfoHeading || '').trim();
+    const additionalInfoResult = String(req.body?.additionalInfoResult || '').trim();
     const businessId = String(req.body?.businessId || '').trim();
     const businessWebsite = normalizeWebsite(req.body?.businessWebsite);
 
@@ -601,7 +669,22 @@ vendorRouter.post('/:vendorId/profile', async (req, res, next) => {
     if (businessWebsite && !isValidWebsite(businessWebsite)) {
       throw httpError(400, 'Please provide a valid website URL', 'VALIDATION');
     }
+    if (!isValidLogoDataUrl(businessLogo)) {
+      throw httpError(400, 'Business logo must be PNG or SVG data URL', 'VALIDATION');
+    }
+    if (estimateDataUrlBytes(businessLogo) > 2 * 1024 * 1024) {
+      throw httpError(400, 'Business logo file size must be 2MB or less', 'VALIDATION');
+    }
     if (description.length > 1500) throw httpError(400, 'Description is too long', 'VALIDATION');
+    if (additionalInfoHeading.length > 120) {
+      throw httpError(400, 'Additional info heading is too long', 'VALIDATION');
+    }
+    if (additionalInfoResult.length > 1500) {
+      throw httpError(400, 'Additional info result is too long', 'VALIDATION');
+    }
+    if (additionalInfoResult && !additionalInfoHeading) {
+      throw httpError(400, 'Additional info heading is required when result is provided', 'VALIDATION');
+    }
     if (businessId.length > 120) throw httpError(400, 'Business ID is too long', 'VALIDATION');
 
     const [vendor, user] = await Promise.all([
@@ -636,6 +719,7 @@ vendorRouter.post('/:vendorId/profile', async (req, res, next) => {
 
     vendor.name = businessName;
     vendor.email = businessEmail;
+    vendor.businessLogo = businessLogo || undefined;
     vendor.category = businessCategory;
     vendor.website = businessWebsite || undefined;
     vendor.gstBusinessId = businessId || undefined;
@@ -647,6 +731,8 @@ vendorRouter.post('/:vendorId/profile', async (req, res, next) => {
     vendor.supportEmail = supportEmail || undefined;
     vendor.contactEmail = supportEmail || businessEmail;
     vendor.description = description || undefined;
+    vendor.additionalInfoHeading = additionalInfoHeading || undefined;
+    vendor.additionalInfoResult = additionalInfoResult || undefined;
     vendor.profileVisibility = normalizedVisibility;
     await vendor.save();
 
@@ -704,6 +790,43 @@ vendorRouter.post('/:vendorId/settings', async (req, res, next) => {
       ok: true,
       message: 'Settings updated successfully',
       settings: buildVendorSettingsPayload(vendor.settings || {}),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+vendorRouter.post('/:vendorId/settings/password', async (req, res, next) => {
+  try {
+    const vendorId = req.params.vendorId;
+    const currentPassword = String(req.body?.currentPassword || '');
+    const newPassword = String(req.body?.newPassword || '');
+    const confirmPassword = String(req.body?.confirmPassword || '');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      throw httpError(400, 'Current password, new password, and confirmation are required', 'VALIDATION');
+    }
+    if (newPassword.length < 8) {
+      throw httpError(400, 'New password must be at least 8 characters', 'VALIDATION');
+    }
+    if (newPassword !== confirmPassword) {
+      throw httpError(400, 'New password and confirmation do not match', 'VALIDATION');
+    }
+
+    const user = await User.findOne({ vendorId, role: 'VENDOR' });
+    if (!user) throw httpError(404, 'Vendor user not found', 'VENDOR_USER_NOT_FOUND');
+
+    const currentMatches = await verifyPassword(currentPassword, user.passwordHash);
+    if (!currentMatches) {
+      throw httpError(400, 'Current password is incorrect', 'VALIDATION');
+    }
+
+    user.passwordHash = await hashPassword(newPassword);
+    await user.save();
+
+    res.json({
+      ok: true,
+      message: 'Password updated successfully',
     });
   } catch (err) {
     next(err);

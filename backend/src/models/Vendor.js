@@ -22,6 +22,17 @@ const VendorSettingsSchema = new mongoose.Schema(
       paymentUpdateAlert: { type: Boolean, default: true },
       deliveryUpdateAlert: { type: Boolean, default: true },
       emailNotifications: { type: Boolean, default: true },
+      weeklyReportEmail: { type: Boolean, default: false },
+      newFeedbackPush: { type: Boolean, default: false },
+      riskAlertsPush: { type: Boolean, default: true },
+    },
+    security: {
+      twoFactorAuthEnabled: { type: Boolean, default: false },
+    },
+    privacy: {
+      showEmailPublicly: { type: Boolean, default: false },
+      showPhonePublicly: { type: Boolean, default: false },
+      allowUsageAnalytics: { type: Boolean, default: true },
     },
     system: {
       darkMode: { type: Boolean, default: false },
@@ -52,6 +63,7 @@ const VendorPublicVisibilitySchema = new mongoose.Schema(
     phoneNumber: { type: Boolean, default: false },
     supportEmail: { type: Boolean, default: false },
     description: { type: Boolean, default: false },
+    additionalInfo: { type: Boolean, default: false },
     trustScore: { type: Boolean, default: true },
   },
   { _id: false }
@@ -63,6 +75,7 @@ const VendorSchema = new mongoose.Schema(
     email: { type: String, trim: true, lowercase: true },
     contactEmail: { type: String, trim: true },
     supportEmail: { type: String, trim: true, lowercase: true },
+    businessLogo: { type: String, trim: true },
     category: { type: String, trim: true },
     website: { type: String, trim: true },
     gstBusinessId: { type: String, trim: true },
@@ -72,6 +85,8 @@ const VendorSchema = new mongoose.Schema(
     contactName: { type: String, trim: true },
     phone: { type: String, trim: true },
     description: { type: String, trim: true },
+    additionalInfoHeading: { type: String, trim: true },
+    additionalInfoResult: { type: String, trim: true },
     profileVisibility: { type: VendorPublicVisibilitySchema, default: () => ({}) },
     settings: { type: VendorSettingsSchema, default: () => ({}) },
     isFlagged: { type: Boolean, default: false, index: true },

@@ -24,6 +24,7 @@ export const PUBLIC_VISIBILITY_DEFAULTS = {
   phoneNumber: false,
   supportEmail: false,
   description: false,
+  additionalInfo: false,
   trustScore: true,
 }
 
@@ -48,6 +49,7 @@ export function normalizePublicVisibility(raw = {}) {
     phoneNumber: typeof source.phoneNumber === 'boolean' ? source.phoneNumber : PUBLIC_VISIBILITY_DEFAULTS.phoneNumber,
     supportEmail: typeof source.supportEmail === 'boolean' ? source.supportEmail : PUBLIC_VISIBILITY_DEFAULTS.supportEmail,
     description: typeof source.description === 'boolean' ? source.description : PUBLIC_VISIBILITY_DEFAULTS.description,
+    additionalInfo: typeof source.additionalInfo === 'boolean' ? source.additionalInfo : PUBLIC_VISIBILITY_DEFAULTS.additionalInfo,
     trustScore: typeof source.trustScore === 'boolean' ? source.trustScore : PUBLIC_VISIBILITY_DEFAULTS.trustScore,
   }
 }
@@ -59,6 +61,7 @@ export function emptyProfile(overrides = {}) {
   return {
     businessName: '',
     businessEmail: '',
+    businessLogo: '',
     businessCategory: 'Electronics',
     businessWebsite: '',
     businessId: '',
@@ -69,6 +72,8 @@ export function emptyProfile(overrides = {}) {
     phoneNumber: '',
     supportEmail: '',
     description: '',
+    additionalInfoHeading: '',
+    additionalInfoResult: '',
     trustScore: null,
     ...source,
     publicVisibility,
@@ -81,6 +86,7 @@ export function normalizeProfile(raw = {}, fallbackTrustScore = null) {
   return emptyProfile({
     businessName: String(raw?.businessName || '').trim(),
     businessEmail: String(raw?.businessEmail || '').trim(),
+    businessLogo: String(raw?.businessLogo || '').trim(),
     businessCategory: String(raw?.businessCategory || 'Electronics').trim() || 'Electronics',
     businessWebsite: String(raw?.businessWebsite || '').trim(),
     businessId: String(raw?.businessId || '').trim(),
@@ -91,6 +97,8 @@ export function normalizeProfile(raw = {}, fallbackTrustScore = null) {
     phoneNumber: String(raw?.phoneNumber || '').trim(),
     supportEmail: String(raw?.supportEmail || '').trim(),
     description: String(raw?.description || '').trim(),
+    additionalInfoHeading: String(raw?.additionalInfoHeading || '').trim(),
+    additionalInfoResult: String(raw?.additionalInfoResult || '').trim(),
     publicVisibility: normalizePublicVisibility(raw?.publicVisibility),
     trustScore: Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : null,
   })

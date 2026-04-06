@@ -15,6 +15,7 @@ const {
   getAdminSettings,
   updateAdminSettings,
   flagVendor,
+  unflagVendor,
   terminateVendor,
   reactivateVendor,
   getActionLogs,
@@ -134,6 +135,31 @@ adminRouter.post('/vendors/:vendorId/flag', async (req, res, next) => {
 
     const reason = String(req.body?.reason || '').trim();
     const vendor = await flagVendor({
+      vendorId,
+      actorUserId: req.user.userId,
+      actorEmail: req.user.email,
+      reason,
+    });
+
+    if (!vendor) {
+      return res.status(404).json({ ok: false, error: { message: 'Vendor not found' } });
+    }
+
+    res.json({ ok: true, vendor });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.post('/vendors/:vendorId/unflag', async (req, res, next) => {
+  try {
+    const vendorId = String(req.params.vendorId || '');
+    if (!mongoose.Types.ObjectId.isValid(vendorId)) {
+      return res.status(404).json({ ok: false, error: { message: 'Vendor not found' } });
+    }
+
+    const reason = String(req.body?.reason || '').trim();
+    const vendor = await unflagVendor({
       vendorId,
       actorUserId: req.user.userId,
       actorEmail: req.user.email,

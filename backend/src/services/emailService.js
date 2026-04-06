@@ -22,6 +22,9 @@ function getSmtpConfig() {
       port,
       secure: false,
       auth: { user, pass },
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 8000,
       tls: {
         minVersion: 'TLSv1.2',
         // Reject self-signed by default; set to false only if you know you need it.

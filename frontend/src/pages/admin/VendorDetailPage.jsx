@@ -1,4 +1,4 @@
-import { PieChart, Pie, Tooltip, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { PieChart, Pie, Tooltip, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Area } from 'recharts'
 import { KpiCard, SectionCard } from '../../components/admin/AdminUi'
 
 const pieColors = ['#16a34a', '#f59e0b', '#dc2626']
@@ -37,11 +37,19 @@ export function VendorDetailPage({ isDark, detail }) {
           ].join(' ')}>
             <ResponsiveContainer width="100%" height="100%" minWidth={240} minHeight={220}>
               <LineChart data={detail.trustTrend || []}>
+                <defs>
+                  <linearGradient id="adminVendorTrustShade" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366F1" stopOpacity={0.24} />
+                    <stop offset="70%" stopColor="#6366F1" stopOpacity={0.1} />
+                    <stop offset="100%" stopColor="#6366F1" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} />
                 <XAxis dataKey="date" tick={{ fontSize: 12, fill: isDark ? '#94a3b8' : '#64748b' }} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: isDark ? '#94a3b8' : '#64748b' }} />
                 <Tooltip />
-                <Line type="monotone" dataKey="averageTrust" stroke="#0ea5e9" strokeWidth={3} dot={false} />
+                <Area type="monotone" dataKey="averageTrust" stroke="none" fill="url(#adminVendorTrustShade)" baseValue={50} />
+                <Line type="monotone" dataKey="averageTrust" stroke="#5B61EA" strokeWidth={4} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

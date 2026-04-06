@@ -284,6 +284,7 @@ async function listAdminVendors() {
       return {
         vendorId: String(vendor._id),
         name: vendor.name,
+        category: vendor.category || 'Uncategorized',
         averageTrustScore,
         totalFeedbacks,
         statusBadge: toVendorStatus(averageTrustScore, vendor.isTerminated),
@@ -351,6 +352,7 @@ async function computeAlerts({ limitPerType = 20 } = {}) {
         id: `device:${String(d._id)}`,
         severity: normalizeSeverity(d.count >= 6 ? 'HIGH' : 'MEDIUM'),
         type: 'REPEATED_DEVICE_ACTIVITY',
+        detectedAt: new Date().toISOString(),
         description: `Same device hash submitted ${d.count} feedback(s) in last 24h`,
         relatedVendor: d.vendors.length === 1 ? vendorNameMap.get(String(d.vendors[0])) || null : 'Multiple vendors',
         evidence: { deviceHash: d._id, vendorCount: d.vendors.length },
@@ -362,6 +364,7 @@ async function computeAlerts({ limitPerType = 20 } = {}) {
         id: `ip:${String(ip._id)}`,
         severity: normalizeSeverity(ip.count >= 7 ? 'HIGH' : 'MEDIUM'),
         type: 'MULTIPLE_REVIEWS_SAME_NETWORK',
+        detectedAt: new Date().toISOString(),
         description: `Network hash generated ${ip.count} cross-vendor feedback(s) in last 24h`,
         relatedVendor: 'Multiple vendors',
         evidence: { ipHash: ip._id, vendorCount: ip.vendors.length },
@@ -373,6 +376,7 @@ async function computeAlerts({ limitPerType = 20 } = {}) {
         id: `duplicate:${String(dup._id)}`,
         severity: normalizeSeverity(dup.count >= 4 ? 'HIGH' : 'MEDIUM'),
         type: 'DUPLICATE_CONTENT_CLUSTER',
+        detectedAt: new Date().toISOString(),
         description: `Duplicate content cluster detected (${dup.count} similar submissions)`,
         relatedVendor: dup.vendors.length === 1 ? vendorNameMap.get(String(dup.vendors[0])) || null : 'Multiple vendors',
         evidence: { textHash: dup._id, vendorCount: dup.vendors.length },
@@ -384,6 +388,7 @@ async function computeAlerts({ limitPerType = 20 } = {}) {
         id: `spike:${String(v._id)}`,
         severity: normalizeSeverity(v.count >= 15 ? 'HIGH' : 'MEDIUM'),
         type: 'SUSPICIOUS_BEHAVIOR_PATTERN',
+        detectedAt: new Date().toISOString(),
         description: `High feedback volume for vendor in 24h (${v.count})`,
         relatedVendor: vendorNameMap.get(String(v._id)) || String(v._id),
         evidence: { vendorId: String(v._id), count: v.count },
@@ -395,6 +400,7 @@ async function computeAlerts({ limitPerType = 20 } = {}) {
         id: `typing:${String(f._id)}`,
         severity: 'MEDIUM',
         type: 'SUSPICIOUS_BEHAVIOR_PATTERN',
+        detectedAt: new Date().toISOString(),
         description: `Fast typing cluster detected for vendor (${f.count} feedbacks under 1.5s)`,
         relatedVendor: vendorNameMap.get(String(f._id)) || String(f._id),
         evidence: { vendorId: String(f._id), count: f.count },
@@ -568,6 +574,8 @@ async function getVendorProfile(vendorId) {
         phoneNumber: String(vendor.phone || ''),
         supportEmail: String(vendor.supportEmail || vendor.contactEmail || ''),
         description: String(vendor.description || ''),
+        additionalInfoHeading: String(vendor.additionalInfoHeading || ''),
+        additionalInfoResult: String(vendor.additionalInfoResult || ''),
         publicVisibility: vendor.profileVisibility || {},
       },
       account: {
@@ -624,11 +632,11 @@ async function getAnalyticsSnapshot() {
       'analytics.vendors',
       () =>
         Vendor.find({ _id: { $in: vendorPerfRows.map((item) => item._id) } })
-          .select({ _id: 1, name: 1 })
+          .select({ _id: 1, name: 1, category: 1 })
           .lean(),
       []
     );
-    const vendorMap = new Map(vendors.map((item) => [String(item._id), item.name]));
+    const vendorMap = new Map(vendors.map((item) => [String(item._id), item]));
 
     return {
       trustScoreTrend: trendRows.map((row) => ({
@@ -642,7 +650,8 @@ async function getAnalyticsSnapshot() {
       })),
       vendorPerformance: vendorPerfRows.map((row) => ({
         vendorId: String(row._id),
-        vendorName: vendorMap.get(String(row._id)) || String(row._id),
+        vendorName: vendorMap.get(String(row._id))?.name || String(row._id),
+        category: vendorMap.get(String(row._id))?.category || 'Uncategorized',
         averageTrust: Number(Number(row.averageTrust || 0).toFixed(2)),
         totalFeedbacks: row.totalFeedbacks,
       })),
@@ -739,6 +748,33 @@ async function flagVendor({ vendorId, actorUserId, actorEmail, reason }) {
   return vendor;
 }
 
+async function unflagVendor({ vendorId, actorUserId, actorEmail, reason }) {
+  const vendor = await Vendor.findByIdAndUpdate(
+    vendorId,
+    {
+      $set: {
+        isFlagged: false,
+        flaggedAt: null,
+        flaggedBy: null,
+        flaggedReason: null,
+      },
+    },
+    { new: true }
+  ).lean();
+
+  if (!vendor) return null;
+
+  await logAdminAction({
+    actionType: 'UNFLAG_VENDOR',
+    actorUserId,
+    actorEmail,
+    vendorId,
+    reason,
+  });
+
+  return vendor;
+}
+
 async function terminateVendor({ vendorId, actorUserId, actorEmail, reason }) {
   const vendor = await Vendor.findByIdAndUpdate(
     vendorId,
@@ -814,6 +850,7 @@ module.exports = {
   getAdminSettings,
   updateAdminSettings,
   flagVendor,
+  unflagVendor,
   terminateVendor,
   reactivateVendor,
   getActionLogs,

@@ -1,4 +1,4 @@
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import { apiPost } from '../lib/api'
 import { getSession, setSession } from '../lib/session'
@@ -11,7 +11,6 @@ function isAuthedVendor(session) {
 }
 
 export function VendorLoginPage() {
-  const navigate = useNavigate()
   const location = useLocation()
   const [form, setForm] = useState(() => ({
     email: String(location.state?.signupEmail || ''),
@@ -23,12 +22,21 @@ export function VendorLoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [otpSent, setOtpSent] = useState(false)
   const [otpValue, setOtpValue] = useState('')
+  const [dashboardOpenBlocked, setDashboardOpenBlocked] = useState(false)
+  const [openedDashboardInNewTab, setOpenedDashboardInNewTab] = useState(false)
   const signupSuccessMessage = String(location.state?.signupSuccessMessage || '')
   const sessionMessage = String(location.state?.sessionMessage || '')
 
   const session = getSession()
-  if (isAuthedVendor(session)) {
+  if (isAuthedVendor(session) && !openedDashboardInNewTab) {
     return <Navigate to="/vendor/dashboard" replace />
+  }
+
+  function openDashboardInNewTab() {
+    const popup = window.open('/vendor/dashboard', '_blank')
+    const blocked = !popup
+    setDashboardOpenBlocked(blocked)
+    return !blocked
   }
 
   function updateField(field, value) {
@@ -46,6 +54,7 @@ export function VendorLoginPage() {
     setErrors(nextErrors)
     setSubmitError('')
     setSuccessMessage('')
+    setDashboardOpenBlocked(false)
     if (Object.keys(nextErrors).length) return
 
     try {
@@ -64,8 +73,9 @@ export function VendorLoginPage() {
       }
 
       setSession({ token: data.token, user: data.user })
-      const returnTo = String(location.state?.from || '/vendor/dashboard')
-      navigate(returnTo.startsWith('/vendor') ? returnTo : '/vendor/dashboard', { replace: true })
+      const opened = openDashboardInNewTab()
+      setOpenedDashboardInNewTab(opened)
+      setSuccessMessage(opened ? 'Dashboard opened in new tab' : 'Login successful. Pop-up blocked.')
     } catch (error) {
       setSubmitError(error?.message || 'Login failed')
     } finally {
@@ -110,6 +120,19 @@ export function VendorLoginPage() {
       {signupSuccessMessage ? <div className="alert">{signupSuccessMessage}</div> : null}
       {sessionMessage ? <div className="alert">{sessionMessage}</div> : null}
       {successMessage ? <div className="alert">{successMessage}</div> : null}
+      {dashboardOpenBlocked ? (
+        <div className="alert" role="status">
+          Click here to open dashboard{' '}
+          <button
+            type="button"
+            className="vendorAuthLink"
+            onClick={openDashboardInNewTab}
+            style={{ border: 0, background: 'none', padding: 0, cursor: 'pointer' }}
+          >
+            Open Dashboard
+          </button>
+        </div>
+      ) : null}
       {submitError ? <div className="alert error">{submitError}</div> : null}
 
       <form className="vendorAuthForm" onSubmit={onSubmit} noValidate>

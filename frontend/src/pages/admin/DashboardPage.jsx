@@ -1,4 +1,4 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Area } from 'recharts'
 import {
   BarChart3,
   BellRing,
@@ -178,8 +178,10 @@ export function DashboardPage({ isDark, overview, alerts = [], analytics, logs =
                     color: isDark ? '#e2e8f0' : '#0F172A',
                     fontSize: 12,
                   }}
+                  formatter={(value) => [value, 'Trust Score']}
                 />
-                <Line type="monotone" dataKey="averageTrust" stroke="#2563EB" strokeWidth={3} dot={false} />
+                <Area type="monotone" dataKey="averageTrust" stroke="none" fill="#5B61EA" fillOpacity={0.16} />
+                <Line type="monotone" dataKey="averageTrust" stroke="#5B61EA" strokeWidth={4} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </AnalyticsChart>

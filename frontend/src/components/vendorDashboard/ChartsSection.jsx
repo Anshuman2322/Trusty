@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  Area,
   Bar,
   BarChart,
   CartesianGrid,
@@ -82,7 +83,8 @@ export function ChartsSection({
                 <XAxis dataKey="label" tick={axisTick} minTickGap={18} />
                 <YAxis domain={[0, 100]} />
                 <Tooltip formatter={(value) => [`${value}`, 'Trust Score']} />
-                <Line type="monotone" dataKey="score" stroke="#0ea5b7" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                <Area type="monotone" dataKey="score" stroke="none" fill="#5B61EA" fillOpacity={0.16} />
+                <Line type="monotone" dataKey="score" stroke="#5B61EA" strokeWidth={4} dot={false} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </ChartFrame>

@@ -465,13 +465,19 @@ supportRouter.post('/tickets', async (req, res, next) => {
       ipHash,
     });
 
-    const notification = await sendSupportEmailSafe({
+    // Respond immediately so the UI does not block on SMTP/network latency.
+    res.status(201).json({
+      ok: true,
+      ticket: publicTicketView(ticket),
+      referenceId,
+      notification: { attempted: true, queued: true },
+    });
+
+    void sendSupportEmailSafe({
       to: email,
       subject: `Trusty Ticket Created - Ref ${referenceId}`,
       body: `Hello ${name},\n\nYour support ticket has been created successfully.\n\nReference ID: ${referenceId}\nIssue Type: ${issueTypeRaw}\nStatus: open\n\nPlease note this reference ID for future tracking. You will receive email updates whenever support replies.`,
     });
-
-    res.status(201).json({ ok: true, ticket: publicTicketView(ticket), referenceId, notification });
   } catch (err) {
     next(err);
   }

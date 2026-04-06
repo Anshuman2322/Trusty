@@ -34,6 +34,7 @@ const VENDOR_PROFILE_VISIBILITY_DEFAULTS = {
   phoneNumber: false,
   supportEmail: false,
   description: false,
+  additionalInfo: false,
   trustScore: true,
 };
 
@@ -76,6 +77,7 @@ function normalizeProfileVisibility(rawVisibility = {}) {
     phoneNumber: coerceBoolean(source.phoneNumber, VENDOR_PROFILE_VISIBILITY_DEFAULTS.phoneNumber),
     supportEmail: coerceBoolean(source.supportEmail, VENDOR_PROFILE_VISIBILITY_DEFAULTS.supportEmail),
     description: coerceBoolean(source.description, VENDOR_PROFILE_VISIBILITY_DEFAULTS.description),
+    additionalInfo: coerceBoolean(source.additionalInfo, VENDOR_PROFILE_VISIBILITY_DEFAULTS.additionalInfo),
     trustScore: coerceBoolean(source.trustScore, VENDOR_PROFILE_VISIBILITY_DEFAULTS.trustScore),
   };
 }
@@ -118,6 +120,7 @@ async function buildVendorPublicDisplayProfile(vendorId) {
   return {
     vendorId: String(vendor._id),
     name: publicName,
+    businessLogo: toPublicText(vendor?.businessLogo),
     businessCategory: getVisibleField(visibility, 'businessCategory', vendor?.category),
     businessEmail: getVisibleField(visibility, 'businessEmail', vendor?.email || vendor?.contactEmail),
     supportEmail: getVisibleField(
@@ -130,6 +133,13 @@ async function buildVendorPublicDisplayProfile(vendorId) {
     businessId: getVisibleField(visibility, 'businessId', vendor?.gstBusinessId),
     contactPersonName: getVisibleField(visibility, 'contactPersonName', vendor?.contactName),
     description: getVisibleField(visibility, 'description', vendor?.description),
+    additionalInfo:
+      visibility?.additionalInfo && (toPublicText(vendor?.additionalInfoHeading) || toPublicText(vendor?.additionalInfoResult))
+        ? {
+            heading: toPublicText(vendor?.additionalInfoHeading) || 'Additional Information',
+            result: toPublicText(vendor?.additionalInfoResult),
+          }
+        : null,
     location: buildVisibleLocation(vendor, visibility),
     averageTrustScore: trustVisible ? averageTrustScore : null,
     totalFeedbacks,

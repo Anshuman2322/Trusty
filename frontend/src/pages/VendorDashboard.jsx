@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { FeedbackExplanation } from '../components/FeedbackExplanation'
+import { ConfirmationModal } from '../components/admin/ConfirmationModal'
 import {
   AlertsPanel,
   AnalyticsPage,
@@ -102,6 +102,46 @@ function feedbackTagTone(tag) {
   return 'neutral'
 }
 
+function buildSignalBreakdownRows(feedback) {
+  const breakdown = feedback?.trustBreakdown
+  if (!breakdown || Array.isArray(breakdown)) return []
+
+  const rows = [
+    { label: 'Token Verification', item: breakdown.tokenVerification },
+    { label: 'Payment Proof', item: breakdown.paymentProof },
+    { label: 'AI Content Quality', item: breakdown.aiBehavior },
+    { label: 'Behavior Analysis', item: breakdown.contextDepth },
+    { label: 'Device Uniqueness', item: breakdown.devicePattern },
+  ]
+
+  return rows
+    .filter((row) => row.item)
+    .map((row) => {
+      const score = Number(row.item.score || 0)
+      const maxScore = Number(row.item.maxScore || 0)
+      const pct = maxScore > 0 ? Math.max(0, Math.min(100, (score / maxScore) * 100)) : 0
+      return {
+        label: row.label,
+        score,
+        pct,
+      }
+    })
+}
+
+function trustTone(score) {
+  const safe = normalizeScore(score)
+  if (safe >= 70) return 'high'
+  if (safe >= 40) return 'medium'
+  return 'low'
+}
+
+function trustHealthCopy(score) {
+  const safe = normalizeScore(score)
+  if (safe >= 70) return 'looking healthy'
+  if (safe >= 40) return 'improving steadily'
+  return 'needs attention'
+}
+
 function applyWorkspaceTheme(isDarkMode) {
   if (typeof document === 'undefined' || typeof window === 'undefined') return
   const theme = isDarkMode ? 'dark' : 'light'
@@ -110,54 +150,143 @@ function applyWorkspaceTheme(isDarkMode) {
   window.dispatchEvent(new CustomEvent('trusty-theme-change', { detail: { theme } }))
 }
 
-function FeedbackSection({ feedbacks }) {
+function FeedbackSection({ feedbacks, onSelect }) {
+  const [query, setQuery] = useState('')
+  const [sortBy, setSortBy] = useState('newest')
+  const [status, setStatus] = useState('all')
+
+  const visibleFeedbacks = useMemo(() => {
+    const q = String(query || '').trim().toLowerCase()
+
+    const filtered = (feedbacks || []).filter((item) => {
+      const score = normalizeScore(item?.trustScore)
+      const text = String(item?.text || '').toLowerCase()
+      const product = String(item?.productName || '').toLowerCase()
+      const displayName = String(item?.displayName || '').toLowerCase()
+
+      if (q && !text.includes(q) && !product.includes(q) && !displayName.includes(q)) {
+        return false
+      }
+
+      if (status === 'verified') return Boolean(item?.codeValid)
+      if (status === 'anonymous') return !item?.codeValid
+      if (status === 'anchored') return Boolean(item?.blockchain?.txRef)
+      if (status === 'risk') return String(item?.ipRiskLevel || '').toUpperCase() === 'HIGH' || score < 40
+      if (status === 'high') return score >= 70
+      if (status === 'medium') return score >= 40 && score < 70
+      if (status === 'low') return score < 40
+
+      return true
+    })
+
+    filtered.sort((a, b) => {
+      const aScore = normalizeScore(a?.trustScore)
+      const bScore = normalizeScore(b?.trustScore)
+      const aTime = new Date(a?.createdAt).getTime() || 0
+      const bTime = new Date(b?.createdAt).getTime() || 0
+
+      if (sortBy === 'oldest') return aTime - bTime
+      if (sortBy === 'high-score') return bScore - aScore
+      if (sortBy === 'low-score') return aScore - bScore
+      return bTime - aTime
+    })
+
+    return filtered
+  }, [feedbacks, query, sortBy, status])
+
+  function scoreTone(score) {
+    if (score >= 70) return 'good'
+    if (score >= 40) return 'warn'
+    return 'danger'
+  }
+
   return (
-    <section className="vdSection">
+    <section className="vdSection vdFeedbackPage">
       <div className="vdSectionHead">
-        <h2>Customer Feedback</h2>
-        <p>Read-only feed with trust labels, risk metadata, and explainability traces.</p>
+        <h2>Feedback</h2>
+        <p>Review incoming feedback and quality signals.</p>
       </div>
 
-      {feedbacks.length === 0 ? <div className="vdTableEmpty">No feedback submitted yet.</div> : null}
+      <div className="vdFeedbackToolbar">
+        <label className="vdFeedbackSearch" htmlFor="vd-feedback-search">
+          <span className="vdFeedbackSearchIcon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M16 16l4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </span>
+          <input
+            id="vd-feedback-search"
+            className="vdFeedbackSearchInput"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search feedback or product..."
+          />
+        </label>
 
-      <div className="vdFeedbackList">
-        {feedbacks.map((feedback) => (
-          <article className="vdFeedbackCard" key={feedback._id}>
-            <div className="vdFeedbackScore">
-              <strong>{normalizeScore(feedback.trustScore)}</strong>
-              <span>{trustLabel(feedback.trustScore)}</span>
-            </div>
+        <select className="vdInput vdFeedbackSelect" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="high-score">Highest Score</option>
+          <option value="low-score">Lowest Score</option>
+        </select>
 
-            <div className="vdFeedbackBody">
-              <div className="vdFeedbackMeta">
-                <span className={`vdTone vdTone--${feedbackTone(feedback.trustScore)}`}>{feedback.trustLevel || trustLabel(feedback.trustScore)}</span>
-                <span className={feedback.codeValid ? 'vdTone vdTone--good' : 'vdTone vdTone--neutral'}>{feedback.codeValid ? 'Verified' : 'Anonymous'}</span>
-                {feedback.blockchain?.txRef ? <span className="vdTone vdTone--info">Blockchain Anchored</span> : null}
-                {(feedback.tags || [])
-                  .filter((tag) => tag !== 'Blockchain Anchored' && tag !== 'Verified')
-                  .slice(0, 5)
-                  .map((tag) => (
-                    <span className={`vdTone vdTone--${feedbackTagTone(tag)}`} key={`${feedback._id}-${tag}`}>
-                      {tag}
-                    </span>
-                  ))}
+        <select className="vdInput vdFeedbackSelect" value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="all">All Status</option>
+          <option value="verified">Verified</option>
+          <option value="anonymous">Anonymous</option>
+          <option value="anchored">Blockchain Anchored</option>
+          <option value="risk">Risk Flagged</option>
+          <option value="high">High Trust</option>
+          <option value="medium">Medium Trust</option>
+          <option value="low">Low Trust</option>
+        </select>
+      </div>
+
+      {visibleFeedbacks.length === 0 ? <div className="vdTableEmpty">No feedback matched your current filters.</div> : null}
+
+      <div className="vdFeedbackFeed">
+        {visibleFeedbacks.map((feedback) => {
+          const score = normalizeScore(feedback.trustScore)
+          const tone = scoreTone(score)
+          const productLabel = String(feedback?.productName || '').trim() || 'General Service'
+          const riskHigh = String(feedback?.ipRiskLevel || '').toUpperCase() === 'HIGH' || score < 40
+
+          return (
+            <article
+              className={`vdFeedbackRow vdFeedbackRow--${tone}${riskHigh ? ' is-risk' : ''}`}
+              key={feedback._id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelect(feedback)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  onSelect(feedback)
+                }
+              }}
+              aria-label="Open feedback details"
+            >
+              <div className={`vdFeedbackScoreRing vdFeedbackScoreRing--${tone}`} style={{ '--ring-progress': `${score}%` }}>
+                <div className="vdFeedbackScoreRingInner">{score}</div>
               </div>
 
-              <p className="vdFeedbackText">{feedback.text}</p>
+              <div className="vdFeedbackRowBody">
+                <p className="vdFeedbackRowText">{feedback.text}</p>
 
-              <div className="vdFeedbackDetails">
-                <span>Location: {formatFeedbackLocation(feedback)}</span>
-                <span>Risk: {feedback.ipRiskLevel || 'UNKNOWN'}</span>
-                <span>Date: {formatDate(feedback.createdAt)}</span>
-                <span>
-                  Blockchain: {feedback.blockchain?.txRef ? `${String(feedback.blockchain.txRef).slice(0, 12)}...` : 'N/A'}
-                </span>
+                <div className="vdFeedbackRowMeta">
+                  <span className={feedback.codeValid ? 'vdTone vdTone--good' : 'vdTone vdTone--neutral'}>
+                    {feedback.codeValid ? 'Verified' : 'Anonymous'}
+                  </span>
+                  {feedback.blockchain?.txRef ? <span className="vdTone vdTone--info">Blockchain Anchored</span> : null}
+                  {riskHigh ? <span className="vdTone vdTone--danger">Duplicate Risk</span> : null}
+                  <span className="vdFeedbackMetaText">{productLabel}</span>
+                  <span className="vdFeedbackMetaText">{formatDate(feedback.createdAt)}</span>
+                </div>
               </div>
-
-              <FeedbackExplanation feedback={feedback} buttonLabel="Why this score and tags?" />
-            </div>
-          </article>
-        ))}
+            </article>
+          )
+        })}
       </div>
     </section>
   )
@@ -167,88 +296,218 @@ function CustomerMessagesSection({
   messages,
   loading,
   lastSyncedAt,
+  replyDrafts,
+  onReplyDraftChange,
   replyingId,
   statusBusyId,
   onReply,
   onStatus,
   onRefresh,
 }) {
-  const [replyDrafts, setReplyDrafts] = useState({})
+  const [activeFilter, setActiveFilter] = useState('all')
+  const [selectedMessageId, setSelectedMessageId] = useState('')
+
+  const filteredMessages = useMemo(() => {
+    if (activeFilter === 'all') return messages
+
+    return messages.filter((item) => {
+      const status = String(item?.status || 'open').toLowerCase()
+      if (activeFilter === 'open') return status === 'open'
+      if (activeFilter === 'in-progress') return status === 'replied'
+      if (activeFilter === 'resolved') return status === 'closed'
+      return true
+    })
+  }, [messages, activeFilter])
+
+  useEffect(() => {
+    if (!filteredMessages.length) {
+      setSelectedMessageId('')
+      return
+    }
+
+    const exists = filteredMessages.some((item) => String(item._id) === String(selectedMessageId))
+    if (!exists) setSelectedMessageId(String(filteredMessages[0]._id))
+  }, [filteredMessages, selectedMessageId])
+
+  const selectedMessage = useMemo(
+    () => filteredMessages.find((item) => String(item._id) === String(selectedMessageId)) || null,
+    [filteredMessages, selectedMessageId]
+  )
+
+  const selectedReplyDraft = selectedMessage ? replyDrafts[selectedMessage._id] || '' : ''
+
+  function statusToView(statusRaw) {
+    const status = String(statusRaw || 'open').toLowerCase()
+    if (status === 'replied') return 'in-progress'
+    if (status === 'closed') return 'resolved'
+    return 'open'
+  }
+
+  function viewToApiStatus(viewStatus) {
+    if (viewStatus === 'in-progress') return 'replied'
+    if (viewStatus === 'resolved') return 'closed'
+    return 'open'
+  }
+
+  function statusLabel(statusRaw) {
+    const view = statusToView(statusRaw)
+    if (view === 'in-progress') return 'In-Progress'
+    if (view === 'resolved') return 'Resolved'
+    return 'Open'
+  }
+
+  function compactText(text, limit = 52) {
+    const value = String(text || '').replace(/\s+/g, ' ').trim()
+    if (!value) return 'No message content'
+    if (value.length <= limit) return value
+    return `${value.slice(0, Math.max(0, limit - 3))}...`
+  }
+
+  function handleReplySend() {
+    if (!selectedMessage) return
+    onReply(selectedMessage._id, selectedReplyDraft, () => onReplyDraftChange(selectedMessage._id, ''))
+  }
 
   return (
-    <section className="vdSection">
+    <section className="vdSection vdSupportShell">
       <div className="vdSectionHead">
-        <h2>Customer Messages</h2>
-        <p>Respond to customer requests and close resolved conversations.</p>
-        <p>
-          Auto-refresh: every 15 seconds.
-          {lastSyncedAt ? ` Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}.` : ''}
-        </p>
+        <h2>Support</h2>
+        <p>Raise and track support tickets.</p>
       </div>
 
-      <div>
-        <button type="button" className="btn secondary" onClick={onRefresh}>Refresh Messages</button>
+      <div className="vdSupportToolbar">
+        <div className="vdSupportFilterRow">
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'open', label: 'Open' },
+            { key: 'in-progress', label: 'In-Progress' },
+            { key: 'resolved', label: 'Resolved' },
+          ].map((filter) => (
+            <button
+              type="button"
+              key={filter.key}
+              className={`vdSupportFilterBtn${activeFilter === filter.key ? ' is-active' : ''}`}
+              onClick={() => setActiveFilter(filter.key)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+
+        <button type="button" className="btn secondary" onClick={onRefresh}>Refresh</button>
       </div>
 
       {loading ? <div className="vdTableEmpty">Loading customer messages...</div> : null}
-      {!loading && messages.length === 0 ? <div className="vdTableEmpty">No customer messages yet.</div> : null}
 
-      <div className="vdSupportMessageList">
-        {messages.map((item) => (
-          <article className="vdSupportMessageCard" key={item._id}>
-            <div className="vdSupportMessageHeader">
-              <div>
-                <strong>{item.userName || 'Customer'}</strong>
-                <span>{item.userEmail || 'No email'}</span>
-                {item.userPhone ? <span>{item.userPhone}</span> : null}
-                <span>{new Date(item.createdAt).toLocaleString()}</span>
+      {!loading && filteredMessages.length === 0 ? <div className="vdTableEmpty">No messages in this filter.</div> : null}
+
+      <div className="vdSupportLayout">
+        <div className="vdSupportTicketList">
+          {filteredMessages.map((item) => {
+            const statusView = statusToView(item.status)
+            const repliesCount = Array.isArray(item.replies) ? item.replies.length : item.reply ? 1 : 0
+
+            return (
+              <button
+                type="button"
+                className={`vdSupportTicketCard${String(selectedMessageId) === String(item._id) ? ' is-active' : ''}`}
+                key={item._id}
+                onClick={() => setSelectedMessageId(String(item._id))}
+              >
+                <div className="vdSupportTicketCardHead">
+                  <strong>{compactText(item.message, 31)}</strong>
+                  <span className={`vdSupportStatus vdSupportStatus--${statusView}`}>{statusLabel(item.status)}</span>
+                </div>
+                <p>{compactText(item.message, 68)}</p>
+                <div className="vdSupportTicketMeta">
+                  <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                  <span>{repliesCount} repl{repliesCount === 1 ? 'y' : 'ies'}</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        <article className="vdSupportDetailPanel">
+          {selectedMessage ? (
+            <>
+              <header className="vdSupportDetailHead">
+                <div>
+                  <h3>{selectedMessage.userName || 'Customer message'}</h3>
+                  <p>
+                    {selectedMessage.userEmail || 'No email'}
+                    {selectedMessage.userPhone ? ` • ${selectedMessage.userPhone}` : ''}
+                    {' • '}
+                    {new Date(selectedMessage.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <span className={`vdSupportStatus vdSupportStatus--${statusToView(selectedMessage.status)}`}>
+                  {statusLabel(selectedMessage.status)}
+                </span>
+              </header>
+
+              <div className="vdSupportMessageBubble">
+                <p>{selectedMessage.message}</p>
               </div>
-              <span className={`vdSupportStatus vdSupportStatus--${String(item.status || 'open').toLowerCase()}`}>
-                {item.status}
-              </span>
+
+              {selectedMessage.reply ? (
+                <div className="vdSupportReplyBubble">
+                  <span>Latest Reply</span>
+                  <p>{selectedMessage.reply}</p>
+                </div>
+              ) : null}
+
+              <div className="vdSupportActions">
+                <textarea
+                  className="textarea"
+                  placeholder="Type your reply to customer..."
+                  value={selectedReplyDraft}
+                  onChange={(event) => onReplyDraftChange(selectedMessage._id, event.target.value)}
+                />
+
+                <div className="vdSupportActionButtons">
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={replyingId === selectedMessage._id || !selectedReplyDraft.trim()}
+                    onClick={handleReplySend}
+                  >
+                    {replyingId === selectedMessage._id ? 'Sending...' : 'Send Reply'}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    disabled={statusBusyId === selectedMessage._id || statusToView(selectedMessage.status) === 'in-progress'}
+                    onClick={() => onStatus(selectedMessage._id, viewToApiStatus('in-progress'))}
+                  >
+                    Mark In-Progress
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    disabled={statusBusyId === selectedMessage._id || statusToView(selectedMessage.status) === 'resolved'}
+                    onClick={() => onStatus(selectedMessage._id, viewToApiStatus('resolved'))}
+                  >
+                    Resolve
+                  </button>
+                </div>
+
+                <p className="vdSupportSyncMeta">
+                  Auto-refresh every 15s.
+                  {lastSyncedAt ? ` Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}.` : ''}
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="vdSupportEmptyDetail">
+              <div className="vdSupportEmptyIcon">?</div>
+              <h3>Select a ticket to view details</h3>
+              <p>Click on any ticket from the list</p>
             </div>
-
-            <p className="vdSupportMessageBody">{item.message}</p>
-
-            {item.reply ? (
-              <div className="vdSupportReplyBox">
-                <span>Latest Reply</span>
-                <p>{item.reply}</p>
-              </div>
-            ) : null}
-
-            <div className="vdSupportActions">
-              <textarea
-                className="textarea"
-                placeholder="Write a clear reply for customer"
-                value={replyDrafts[item._id] || ''}
-                onChange={(event) => setReplyDrafts((prev) => ({ ...prev, [item._id]: event.target.value }))}
-              />
-
-              <div className="vdSupportActionButtons">
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={replyingId === item._id || !(replyDrafts[item._id] || '').trim()}
-                  onClick={() => onReply(item._id, replyDrafts[item._id], () => setReplyDrafts((prev) => ({ ...prev, [item._id]: '' })))}
-                >
-                  {replyingId === item._id ? 'Sending...' : 'Send Reply'}
-                </button>
-
-                <select
-                  className="input"
-                  value={item.status || 'open'}
-                  onChange={(event) => onStatus(item._id, event.target.value)}
-                  disabled={statusBusyId === item._id}
-                >
-                  <option value="open">open</option>
-                  <option value="replied">replied</option>
-                  <option value="closed">closed</option>
-                </select>
-              </div>
-            </div>
-          </article>
-        ))}
+          )}
+        </article>
       </div>
     </section>
   )
@@ -284,8 +543,10 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
   const [vendorSettings, setVendorSettings] = useState(null)
   const [supportMessages, setSupportMessages] = useState([])
   const [supportMessagesLastSyncedAt, setSupportMessagesLastSyncedAt] = useState('')
+  const [replyDrafts, setReplyDrafts] = useState({})
   const [replyingMessageId, setReplyingMessageId] = useState('')
   const [messageStatusBusyId, setMessageStatusBusyId] = useState('')
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -475,6 +736,7 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     setVendorSettings(null)
     setSupportMessages([])
     setSupportMessagesLastSyncedAt('')
+    setReplyDrafts({})
     setReplyingMessageId('')
     setMessageStatusBusyId('')
     setCreateOpen(false)
@@ -482,6 +744,19 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     setSelectedFeedback(null)
     const state = sessionMessage ? { sessionMessage } : undefined
     navigate('/vendor/login', { replace: true, state })
+  }
+
+  function requestLogout() {
+    setLogoutConfirmOpen(true)
+  }
+
+  function cancelLogout() {
+    setLogoutConfirmOpen(false)
+  }
+
+  function confirmLogout() {
+    setLogoutConfirmOpen(false)
+    onLogout()
   }
 
   async function onCreateOrder(event) {
@@ -556,6 +831,57 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
   const pendingPayments = useMemo(() => {
     return (orders || []).filter((order) => String(order.paymentStatus || '').toUpperCase() === 'PENDING')
   }, [orders])
+
+  const welcomeName = useMemo(() => {
+    const directName = String(sessionState?.user?.name || sessionState?.user?.fullName || '').trim()
+    if (directName) return directName
+
+    const email = String(sessionState?.user?.email || '').trim()
+    if (!email) return 'Vendor'
+
+    const localPart = email.split('@')[0] || 'Vendor'
+    return localPart
+      .split(/[._-]/g)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ') || 'Vendor'
+  }, [sessionState?.user?.email, sessionState?.user?.fullName, sessionState?.user?.name])
+
+  const businessName = useMemo(() => {
+    return String(vendorProfile?.businessName || sessionState?.user?.vendorName || 'Your business')
+  }, [sessionState?.user?.vendorName, vendorProfile?.businessName])
+
+  const welcomeTrustScore = useMemo(() => normalizeScore(overview?.averageTrustScore), [overview?.averageTrustScore])
+  const welcomeTrustTone = useMemo(() => trustTone(welcomeTrustScore), [welcomeTrustScore])
+  const welcomeTrustLabel = useMemo(() => trustLabel(welcomeTrustScore), [welcomeTrustScore])
+  const feedbackCount = useMemo(() => overview?.totalFeedbackCount ?? feedbacks.length, [overview?.totalFeedbackCount, feedbacks.length])
+  const totalOrdersCount = useMemo(() => overview?.totalOrders ?? orders.length, [overview?.totalOrders, orders.length])
+  const welcomeTrustDelta = useMemo(() => {
+    const now = Date.now()
+    const weekMs = 7 * 24 * 60 * 60 * 1000
+
+    const thisWeek = feedbacks.filter((item) => {
+      const t = new Date(item?.createdAt).getTime()
+      return t && t >= now - weekMs
+    })
+
+    const previousWeek = feedbacks.filter((item) => {
+      const t = new Date(item?.createdAt).getTime()
+      return t && t >= now - 2 * weekMs && t < now - weekMs
+    })
+
+    const thisAvg = thisWeek.length
+      ? thisWeek.reduce((sum, item) => sum + normalizeScore(item?.trustScore), 0) / thisWeek.length
+      : 0
+
+    const prevAvg = previousWeek.length
+      ? previousWeek.reduce((sum, item) => sum + normalizeScore(item?.trustScore), 0) / previousWeek.length
+      : 0
+
+    if (prevAvg <= 0) return 0
+    return Number((((thisAvg - prevAvg) / prevAvg) * 100).toFixed(1))
+  }, [feedbacks])
+  const isTrustImproving = welcomeTrustDelta >= 0
 
   const feedbackByOrderId = useMemo(() => mapFeedbackByOrderId(feedbacks), [feedbacks])
 
@@ -650,6 +976,13 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     }
   }
 
+  function handleReplyDraftChange(messageId, value) {
+    setReplyDrafts((prev) => ({
+      ...prev,
+      [messageId]: value,
+    }))
+  }
+
   async function handleMessageStatus(messageId, status) {
     try {
       setMessageStatusBusyId(messageId)
@@ -711,7 +1044,7 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     if (activeView === 'dashboard') {
       return (
         <>
-          <DashboardCards overview={overview} />
+          <DashboardCards overview={overview} feedbacks={feedbacks} orders={orders} />
           <InsightsPanel insights={quickInsights} />
           <ChartsSection
             title="Performance Snapshot"
@@ -773,7 +1106,7 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     }
 
     if (activeView === 'feedback') {
-      return <FeedbackSection feedbacks={feedbacks} />
+      return <FeedbackSection feedbacks={feedbacks} onSelect={setSelectedFeedback} />
     }
 
     if (activeView === 'messages') {
@@ -782,6 +1115,8 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
           messages={supportMessages}
           loading={loading}
           lastSyncedAt={supportMessagesLastSyncedAt}
+          replyDrafts={replyDrafts}
+          onReplyDraftChange={handleReplyDraftChange}
           replyingId={replyingMessageId}
           statusBusyId={messageStatusBusyId}
           onReply={handleReplyMessage}
@@ -842,7 +1177,7 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
         onToggle={() => setSidebarCollapsed((prev) => !prev)}
         activeItem={activeView}
         onSelect={handleSidebarSelect}
-        onLogout={onLogout}
+        onLogout={requestLogout}
         mobileOpen={sidebarMobileOpen}
         onMobileClose={() => setSidebarMobileOpen(false)}
       />
@@ -892,6 +1227,39 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
             </button>
           </div>
         </header>
+
+        {activeView === 'dashboard' ? (
+          <section className="vdWelcomePanel" aria-label="Vendor trust summary">
+            <div className={`vdWelcomeRing vdWelcomeRing--${welcomeTrustTone}`} style={{ '--ring-progress': `${welcomeTrustScore}%` }}>
+              <div className="vdWelcomeRingInner">
+                <strong>{welcomeTrustScore}</strong>
+              </div>
+            </div>
+
+            <div className="vdWelcomeContent">
+              <h2>Welcome back, {welcomeName}!</h2>
+              <p>{businessName} - your trust profile is {trustHealthCopy(welcomeTrustScore)}.</p>
+
+              <div className="vdWelcomeTrendRow">
+                <span className={`vdWelcomeTrend vdWelcomeTrend--${isTrustImproving ? 'up' : 'down'}`}>
+                  <span className="vdWelcomeTrendArrow" aria-hidden="true" />
+                  {isTrustImproving ? '+' : ''}{welcomeTrustDelta}%
+                </span>
+                <span className="vdWelcomeTrendNote">
+                  {isTrustImproving ? 'Improving' : 'Declining'} | Last 7 days {isTrustImproving ? '+' : ''}{welcomeTrustDelta}%
+                </span>
+              </div>
+
+              <div className="vdWelcomeMeta">
+                <span className={`vdWelcomePill vdWelcomePill--${welcomeTrustTone}`}>
+                  {welcomeTrustLabel}
+                </span>
+                <span className="vdWelcomePill">{feedbackCount} feedbacks</span>
+                <span className="vdWelcomePill">{totalOrdersCount} orders</span>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {error ? <div className="alert error">{error}</div> : null}
 
@@ -1023,41 +1391,96 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
 
       {selectedFeedback ? (
         <div className="modalOverlay" role="presentation" onClick={() => setSelectedFeedback(null)}>
-          <div className="modalCard vdModalCard" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+          <div className="modalCard vdModalCard vdFeedbackDetailModal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
             <div className="modalHeader">
               <div>
-                <div className="cardTitle" style={{ marginBottom: 0 }}>Order Feedback</div>
-                <div className="muted">Linked trust and verification details.</div>
+                <div className="cardTitle" style={{ marginBottom: 0 }}>Feedback Detail</div>
               </div>
               <button className="btn secondary" type="button" onClick={() => setSelectedFeedback(null)}>Close</button>
             </div>
 
             <div style={{ height: 10 }} />
 
-            <div className="vdFeedbackModal">
-              <div className="vdFeedbackMeta">
-                <span className={`vdTone vdTone--${feedbackTone(selectedFeedback.trustScore)}`}>
-                  Score: {normalizeScore(selectedFeedback.trustScore)}
-                </span>
-                <span className="vdTone vdTone--neutral">Level: {selectedFeedback.trustLevel || trustLabel(selectedFeedback.trustScore)}</span>
-                <span className={selectedFeedback.codeValid ? 'vdTone vdTone--good' : 'vdTone vdTone--neutral'}>
-                  {selectedFeedback.codeValid ? 'Verified' : 'Anonymous'}
-                </span>
+            <div className="vdFeedbackDetailBody">
+              <div className="vdFeedbackDetailTop">
+                <div className={`vdFeedbackScoreRing vdFeedbackScoreRing--${feedbackTone(selectedFeedback.trustScore)}`} style={{ '--ring-progress': `${normalizeScore(selectedFeedback.trustScore)}%` }}>
+                  <div className="vdFeedbackScoreRingInner">{normalizeScore(selectedFeedback.trustScore)}</div>
+                </div>
+
+                <div className="vdFeedbackDetailTopMeta">
+                  <div className="vdFeedbackMeta">
+                    <span className={`vdTone vdTone--${feedbackTone(selectedFeedback.trustScore)}`}>
+                      {selectedFeedback.trustLevel || trustLabel(selectedFeedback.trustScore)}
+                    </span>
+                    <span className="vdFeedbackMetaText">{formatDate(selectedFeedback.createdAt)}</span>
+                  </div>
+
+                  <p className="vdFeedbackDetailText">{selectedFeedback.text}</p>
+
+                  <div className="vdFeedbackMeta">
+                    <span className={selectedFeedback.codeValid ? 'vdTone vdTone--good' : 'vdTone vdTone--neutral'}>
+                      {selectedFeedback.codeValid ? 'Verified' : 'Anonymous'}
+                    </span>
+                    {selectedFeedback.blockchain?.txRef ? <span className="vdTone vdTone--info">Blockchain Verified</span> : null}
+                    {selectedFeedback.notReceived ? <span className="vdTone vdTone--danger">Not Received</span> : null}
+                    {(selectedFeedback.tags || [])
+                      .filter((tag) => tag !== 'Blockchain Anchored' && tag !== 'Verified')
+                      .slice(0, 3)
+                      .map((tag) => (
+                        <span className={`vdTone vdTone--${feedbackTagTone(tag)}`} key={`detail-${selectedFeedback._id}-${tag}`}>
+                          {tag}
+                        </span>
+                      ))}
+                  </div>
+                </div>
               </div>
 
-              <p className="vdFeedbackText">{selectedFeedback.text}</p>
+              <section className="vdFeedbackDetailPanel">
+                <h3>Explanation</h3>
+                <p>{selectedFeedback.explanation || 'Trust score was computed from verification, behavior, and signal quality checks.'}</p>
+              </section>
 
-              <div className="vdFeedbackDetails">
-                <span>Location: {formatFeedbackLocation(selectedFeedback)}</span>
-                <span>Risk: {selectedFeedback.ipRiskLevel || 'UNKNOWN'}</span>
-                <span>Date: {formatDate(selectedFeedback.createdAt)}</span>
+              <section className="vdFeedbackDetailPanel">
+                <h3>Signal Breakdown</h3>
+                <div className="vdSignalRows">
+                  {buildSignalBreakdownRows(selectedFeedback).map((row) => (
+                    <div className="vdSignalRow" key={row.label}>
+                      <span>{row.label}</span>
+                      <div className="vdSignalBarTrack">
+                        <div className="vdSignalBarFill" style={{ width: `${row.pct}%` }} />
+                      </div>
+                      <strong>{row.score}</strong>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <div className="vdFeedbackDetailMetaBlock">
+                <div>TX: {selectedFeedback.blockchain?.txRef || 'N/A'}</div>
+                <div>Device: {selectedFeedback.deviceFingerprintHash ? String(selectedFeedback.deviceFingerprintHash).slice(0, 10) : 'N/A'}</div>
+                <div>Location: {formatFeedbackLocation(selectedFeedback)}</div>
+                <div>Risk: {selectedFeedback.ipRiskLevel || 'UNKNOWN'}</div>
               </div>
-
-              <FeedbackExplanation feedback={selectedFeedback} buttonLabel="Why this score and tags?" />
             </div>
           </div>
         </div>
       ) : null}
+
+      <ConfirmationModal
+        isDark={typeof document !== 'undefined' && document.body?.dataset?.theme === 'dark'}
+        open={logoutConfirmOpen}
+        title="Logout from vendor workspace?"
+        description="You are about to sign out from your vendor account on this device."
+        bullets={[
+          'Any unsaved work in the current view may be lost.',
+          'You can sign in again at any time from the vendor login page.',
+        ]}
+        confirmText="Logout"
+        cancelText="Cancel"
+        danger
+        onCancel={cancelLogout}
+        onConfirm={confirmLogout}
+      />
     </div>
   )
 }

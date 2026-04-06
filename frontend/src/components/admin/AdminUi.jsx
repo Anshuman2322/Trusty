@@ -43,15 +43,15 @@ export function StatusBadge({ status }) {
 
 export function SectionCard({ title, subtitle, actions, children }) {
   return (
-    <section className="tw-rounded-2xl tw-border tw-border-[var(--admin-card-border,#d6e4f2)] tw-bg-[var(--admin-card-bg,#fff)] tw-shadow-soft tw-transition-all tw-duration-200 hover:-tw-translate-y-0.5">
-      <div className="tw-flex tw-flex-wrap tw-items-start tw-justify-between tw-gap-2 tw-border-b tw-border-[var(--admin-card-border,#d6e4f2)] tw-px-5 tw-py-4">
+    <section className="tw-rounded-xl tw-border tw-border-[var(--admin-card-border,#d6e4f2)] tw-bg-[var(--admin-card-bg,#fff)] tw-shadow-soft tw-transition-all tw-duration-200 hover:-tw-translate-y-0.5">
+      <div className="tw-flex tw-flex-wrap tw-items-start tw-justify-between tw-gap-2 tw-border-b tw-border-[var(--admin-card-border,#d6e4f2)] tw-px-4 tw-py-3">
         <div>
           <h2 className="tw-text-lg tw-font-semibold tw-tracking-tight tw-text-[var(--admin-text-primary,#0f172a)]">{title}</h2>
-          {subtitle ? <p className="tw-mt-1 tw-text-sm tw-font-medium tw-text-[var(--admin-text-secondary,#4b5f79)]">{subtitle}</p> : null}
+          {subtitle ? <p className="tw-mt-0.5 tw-text-sm tw-font-medium tw-text-[var(--admin-text-secondary,#4b5f79)]">{subtitle}</p> : null}
         </div>
         {actions ? <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">{actions}</div> : null}
       </div>
-      <div className="tw-p-5 md:tw-p-6">{children}</div>
+      <div className="tw-p-4 md:tw-p-4 lg:tw-p-5">{children}</div>
     </section>
   )
 }

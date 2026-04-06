@@ -3,27 +3,35 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
-  FileBarChart2,
-  Fingerprint,
   LayoutDashboard,
-  LogOut,
   MessageSquareText,
   ScrollText,
   Settings,
   ShieldAlert,
 } from 'lucide-react'
 
-const navItems = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'vendors', label: 'Vendors', icon: Building2 },
-  { key: 'feedbacks', label: 'Feedbacks', icon: MessageSquareText },
-  { key: 'alerts', label: 'Risk Alerts', icon: ShieldAlert },
-  { key: 'analytics', label: 'Analytics', icon: BarChart3 },
-  { key: 'patterns', label: 'Patterns', icon: Fingerprint },
-  { key: 'tickets', label: 'Support Tickets', icon: ScrollText },
-  { key: 'reports', label: 'Reports', icon: FileBarChart2 },
-  { key: 'settings', label: 'Settings', icon: Settings },
-  { key: 'logout', label: 'Logout', icon: LogOut },
+const navSections = [
+  {
+    title: 'Intelligence',
+    items: [
+      { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { key: 'alerts', label: 'Risk Alerts', icon: ShieldAlert },
+      { key: 'analytics', label: 'Analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'Management',
+    items: [
+      { key: 'vendors', label: 'Vendors', icon: Building2 },
+      { key: 'feedbacks', label: 'Feedbacks', icon: MessageSquareText },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { key: 'tickets', label: 'Support Tickets', icon: ScrollText },
+    ],
+  },
 ]
 
 export function Sidebar({
@@ -48,7 +56,7 @@ export function Sidebar({
           isDark
             ? 'tw-bg-[#111f34] tw-text-[#E2E8F0] tw-border-[#233650]'
             : 'tw-bg-white tw-text-[#0f172a] tw-border-[#d6e4f2]',
-          collapsed ? 'tw-w-[88px]' : 'tw-w-[270px]',
+          collapsed ? 'tw-w-[78px]' : 'tw-w-[236px]',
           mobileOpen ? 'tw-translate-x-0' : '-tw-translate-x-full lg:tw-translate-x-0',
           'tw-rounded-2xl tw-shadow-soft tw-transition-all tw-duration-300 tw-ease-out',
         ].join(' ')}
@@ -62,7 +70,7 @@ export function Sidebar({
         <div className="tw-h-full tw-flex tw-flex-col">
           <div
             className={[
-              'tw-flex tw-items-center tw-border-b tw-py-5',
+              'tw-flex tw-items-center tw-border-b tw-py-4',
               collapsed ? 'tw-justify-center tw-px-2' : 'tw-justify-between tw-px-4',
               isDark ? 'tw-border-[#233650]' : 'tw-border-[#d6e4f2]',
             ].join(' ')}
@@ -110,44 +118,90 @@ export function Sidebar({
             </button>
           </div>
 
-          <nav className="tw-flex-1 tw-overflow-y-auto tw-p-3 tw-space-y-2">
-            {navItems.map((item) => {
-              const isActive = active === item.key
-              const Icon = item.icon
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => {
-                    onSelect(item.key)
-                    onCloseMobile()
-                  }}
-                  className={[
-                    'tw-w-full tw-flex tw-items-center tw-justify-between tw-rounded-[12px] tw-border tw-px-3 tw-py-2.5 tw-text-left tw-text-sm tw-font-semibold tw-transition-all tw-duration-200 tw-appearance-none tw-outline-none focus:tw-ring-2 focus:tw-ring-blue-500/40',
-                    isActive
-                      ? isDark
-                        ? 'tw-border-[#2b4d81] tw-bg-[#163761] tw-text-white'
-                        : 'tw-border-[rgba(14,165,183,0.45)] tw-bg-[rgba(14,165,183,0.14)] tw-text-[#0f172a]'
-                      : isDark
-                        ? 'tw-border-[#233650] tw-bg-[#111f34] tw-text-slate-200 hover:tw-border-[#2b4d81] hover:tw-bg-[#163761] hover:tw-text-white'
-                        : 'tw-border-transparent tw-bg-transparent tw-text-[#0f172a] hover:tw-border-[#d6e4f2] hover:tw-bg-[rgba(14,165,183,0.09)] hover:-tw-translate-y-0.5',
-                  ].join(' ')}
-                >
-                  <span className={['tw-flex tw-items-center tw-gap-2.5', collapsed ? 'tw-mx-auto' : ''].join(' ')}>
-                    <Icon size={16} />
-                    {!collapsed ? item.label : null}
-                  </span>
-                  {item.key === 'alerts' && !collapsed ? (
-                    <span className={[
-                      'tw-inline-flex tw-min-w-6 tw-items-center tw-justify-center tw-rounded-full tw-px-2 tw-py-0.5 tw-text-[11px] tw-font-semibold',
-                      isDark ? 'tw-bg-rose-500/20 tw-text-rose-100' : 'tw-bg-rose-100 tw-text-rose-700 tw-ring-1 tw-ring-rose-200 tw-shadow-sm',
+          <nav className="hide-scrollbar tw-flex tw-flex-col tw-flex-1 tw-overflow-y-auto tw-pb-3 tw-pl-3 tw-pr-3 tw-pt-1">
+            <div className="tw-space-y-2.5">
+              {navSections.map((section) => (
+                <div key={section.title} className="tw-space-y-1.5">
+                  {!collapsed ? (
+                    <p className={[
+                      'tw-px-2 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-[0.14em]',
+                      isDark ? 'tw-text-slate-400' : 'tw-text-[#4b5f79]',
                     ].join(' ')}>
-                      {alertCount}
-                    </span>
+                      {section.title}
+                    </p>
                   ) : null}
-                </button>
-              )
-            })}
+
+                  <div className="tw-space-y-1.5">
+                    {section.items.map((item) => {
+                      const isActive = active === item.key
+                      const Icon = item.icon
+
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => {
+                            onSelect(item.key)
+                            onCloseMobile()
+                          }}
+                          className={[
+                            'tw-w-full tw-flex tw-items-center tw-justify-between tw-rounded-[12px] tw-border tw-px-3 tw-py-2.5 tw-text-left tw-text-sm tw-font-semibold tw-transition-all tw-duration-200 tw-appearance-none tw-outline-none focus:tw-ring-2 focus:tw-ring-blue-500/40',
+                            isActive
+                              ? isDark
+                                ? 'tw-border-[#2b4d81] tw-bg-[#163761] tw-text-white'
+                                : 'tw-border-[rgba(14,165,183,0.45)] tw-bg-[rgba(14,165,183,0.14)] tw-text-[#0f172a]'
+                              : isDark
+                                ? 'tw-border-[#233650] tw-bg-[#111f34] tw-text-slate-200 hover:tw-border-[#2b4d81] hover:tw-bg-[#163761] hover:tw-text-white'
+                                : 'tw-border-transparent tw-bg-transparent tw-text-[#0f172a] hover:tw-border-[#d6e4f2] hover:tw-bg-[rgba(14,165,183,0.09)] hover:-tw-translate-y-0.5',
+                          ].join(' ')}
+                        >
+                          <span className={['tw-flex tw-items-center tw-gap-2.5', collapsed ? 'tw-mx-auto' : ''].join(' ')}>
+                            <Icon size={16} />
+                            {!collapsed ? item.label : null}
+                          </span>
+                          {item.key === 'alerts' && !collapsed ? (
+                            <span className={[
+                              'tw-inline-flex tw-min-w-6 tw-items-center tw-justify-center tw-rounded-full tw-px-2 tw-py-0.5 tw-text-[11px] tw-font-semibold',
+                              isDark ? 'tw-bg-rose-500/20 tw-text-rose-100' : 'tw-bg-rose-100 tw-text-rose-700 tw-ring-1 tw-ring-rose-200 tw-shadow-sm',
+                            ].join(' ')}>
+                              {alertCount}
+                            </span>
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className={[
+              'tw-mt-auto tw-pt-3 tw-border-t',
+              isDark ? 'tw-border-[#233650]' : 'tw-border-[#d6e4f2]',
+            ].join(' ')}>
+              <button
+                type="button"
+                onClick={() => {
+                  onSelect('settings')
+                  onCloseMobile()
+                }}
+                className={[
+                  'tw-w-full tw-flex tw-items-center tw-justify-between tw-rounded-[12px] tw-border tw-px-3 tw-py-2.5 tw-text-left tw-text-sm tw-font-semibold tw-transition-all tw-duration-200 tw-appearance-none tw-outline-none focus:tw-ring-2 focus:tw-ring-blue-500/40',
+                  active === 'settings'
+                    ? isDark
+                      ? 'tw-border-[#2b4d81] tw-bg-[#163761] tw-text-white'
+                      : 'tw-border-[rgba(14,165,183,0.45)] tw-bg-[rgba(14,165,183,0.14)] tw-text-[#0f172a]'
+                    : isDark
+                      ? 'tw-border-[#233650] tw-bg-[#0e1a2e] tw-text-slate-300 hover:tw-border-[#2b4d81] hover:tw-bg-[#163761] hover:tw-text-white'
+                      : 'tw-border-transparent tw-bg-transparent tw-text-[#52637a] hover:tw-border-[#d6e4f2] hover:tw-bg-[rgba(14,165,183,0.07)] hover:tw-text-[#0f172a]',
+                ].join(' ')}
+              >
+                <span className={['tw-flex tw-items-center tw-gap-2.5', collapsed ? 'tw-mx-auto' : ''].join(' ')}>
+                  <Settings size={16} />
+                  {!collapsed ? 'Settings' : null}
+                </span>
+              </button>
+            </div>
           </nav>
 
           <div className={['tw-border-t tw-p-4 tw-text-xs', isDark ? 'tw-border-[#233650] tw-text-slate-300/80' : 'tw-border-[#d6e4f2] tw-text-[#4b5f79]'].join(' ')}>

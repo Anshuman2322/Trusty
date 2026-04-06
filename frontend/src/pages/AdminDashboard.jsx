@@ -10,8 +10,6 @@ import { VendorProfilePage } from './admin/VendorProfilePage'
 import { FeedbackPage } from './admin/FeedbackPage'
 import { RiskAlertsPage } from './admin/RiskAlertsPage'
 import { AnalyticsPage } from './admin/AnalyticsPage'
-import { PatternsPage } from './admin/PatternsPage'
-import { ReportsPage } from './admin/ReportsPage'
 import { SettingsPage } from './admin/SettingsPage'
 import { TicketsPage } from './admin/TicketsPage'
 
@@ -42,6 +40,7 @@ export function AdminDashboard() {
   const [activeSection, setActiveSection] = useState('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [analyticsTab, setAnalyticsTab] = useState('overview')
 
   const [overview, setOverview] = useState(null)
   const [vendors, setVendors] = useState([])
@@ -77,6 +76,7 @@ export function AdminDashboard() {
     open: false,
     type: 'terminate',
     vendorId: '',
+    vendorName: '',
     title: '',
     description: '',
     bullets: [],
@@ -190,6 +190,9 @@ export function AdminDashboard() {
       requestLogout()
       return
     }
+    if (next === 'analytics') {
+      setAnalyticsTab('overview')
+    }
     setActiveSection(next)
     setMobileOpen(false)
   }
@@ -217,6 +220,38 @@ export function AdminDashboard() {
     } finally {
       setActionBusy(false)
     }
+  }
+
+  function openFlagModal(vendorId, vendorName) {
+    setModalState({
+      open: true,
+      type: 'flag',
+      vendorId,
+      vendorName,
+      title: `Flag ${vendorName || 'this vendor'} for manual review?`,
+      description: `You are about to place ${vendorName || 'this vendor'} under risk monitoring. This adds a visible compliance signal to the admin workspace.`,
+      bullets: [
+        'Vendor status will change to flagged.',
+        'Risk and moderation teams will see this account as prioritized.',
+        'You can remove this flag later from the same action menu.',
+      ],
+    })
+  }
+
+  function openUnflagModal(vendorId, vendorName) {
+    setModalState({
+      open: true,
+      type: 'unflag',
+      vendorId,
+      vendorName,
+      title: `Remove flag from ${vendorName || 'this vendor'}?`,
+      description: `You are about to clear the manual flag from ${vendorName || 'this vendor'}. This indicates the account passed review and no longer needs elevated attention.`,
+      bullets: [
+        'Vendor status will return to active unless another enforcement state exists.',
+        'This action is recorded in admin audit logs.',
+        'You can flag the vendor again at any time if new risk appears.',
+      ],
+    })
   }
 
   function openTerminateModal(vendorId) {
@@ -247,8 +282,20 @@ export function AdminDashboard() {
         await apiPost(`/api/admin/vendors/${modalState.vendorId}/reactivate`, {
           reason: 'Reactivated by admin after review',
         })
+      } else if (modalState.type === 'flag') {
+        await apiPost(`/api/admin/vendors/${modalState.vendorId}/flag`, {
+          reason: 'Flagged from admin risk panel',
+        })
+        await refreshCollections()
+      } else if (modalState.type === 'unflag') {
+        await apiPost(`/api/admin/vendors/${modalState.vendorId}/unflag`, {
+          reason: 'Removed flag after admin review',
+        })
+        await refreshCollections()
       }
-      await refreshCollections()
+      if (modalState.type === 'terminate' || modalState.type === 'reactivate') {
+        await refreshCollections()
+      }
       setModalState((prev) => ({ ...prev, open: false }))
     } catch (e) {
       setError(e?.message || 'Failed to update vendor status')
@@ -285,6 +332,17 @@ export function AdminDashboard() {
     }
   }
 
+  async function onInvestigateAlert(alert) {
+    const vendorId = String(alert?.evidence?.vendorId || '')
+    if (vendorId) {
+      await onViewVendorDetails(vendorId)
+      return
+    }
+
+    setAnalyticsTab('risk')
+    setActiveSection('analytics')
+  }
+
   async function onViewVendorProfile(vendorId) {
     try {
       setActionBusy(true)
@@ -315,15 +373,25 @@ export function AdminDashboard() {
     }
   }
 
-  async function onExportReport(type) {
+  async function onExportReport(type, format = 'csv', range = 'all') {
     try {
       setExporting(type)
-      const blob = await apiGetBlob(`/api/admin/reports/export?type=${encodeURIComponent(type)}`)
+      const query = new URLSearchParams({
+        type: String(type || 'feedback'),
+        format: String(format || 'csv'),
+        range: String(range || 'all'),
+      })
+      const blob = await apiGetBlob(`/api/admin/reports/export?${query.toString()}`)
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
+      const extension = String(format).toLowerCase() === 'pdf' ? 'pdf' : 'csv'
       link.download =
-        type === 'vendor' ? 'vendor-report.csv' : type === 'analytics' ? 'analytics-report.csv' : 'feedback-report.csv'
+        type === 'vendor'
+          ? `vendor-report.${extension}`
+          : type === 'analytics'
+            ? `analytics-report.${extension}`
+            : `feedback-report.${extension}`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -408,6 +476,11 @@ export function AdminDashboard() {
     const timer = window.setInterval(tick, 15000)
     return () => window.clearInterval(timer)
   }, [activeSection, isAuthedAdmin, ticketStatusFilter, refreshTickets])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [activeSection])
 
   if (!isAuthedAdmin) {
     return (
@@ -525,7 +598,8 @@ export function AdminDashboard() {
             onViewDetails={onViewVendorDetails}
             onViewProfile={onViewVendorProfile}
             onViewFeedback={onViewVendorFeedback}
-            onFlag={onFlagVendor}
+            onOpenFlagModal={openFlagModal}
+            onOpenUnflagModal={openUnflagModal}
             onTerminate={openTerminateModal}
             onReactivate={openReactivateModal}
           />
@@ -544,13 +618,27 @@ export function AdminDashboard() {
           />
         ) : null}
 
-        {activeSection === 'alerts' ? <RiskAlertsPage isDark={isDark} alerts={alerts} onFlagVendor={onFlagVendor} /> : null}
+        {activeSection === 'alerts' ? (
+          <RiskAlertsPage
+            isDark={isDark}
+            alerts={alerts}
+            onFlagVendor={onFlagVendor}
+            onInvestigate={onInvestigateAlert}
+          />
+        ) : null}
 
-        {activeSection === 'analytics' ? <AnalyticsPage isDark={isDark} analytics={analytics} /> : null}
-
-        {activeSection === 'patterns' ? <PatternsPage isDark={isDark} patterns={patterns} /> : null}
-
-        {activeSection === 'reports' ? <ReportsPage isDark={isDark} onExport={onExportReport} exporting={exporting} /> : null}
+        {activeSection === 'analytics' ? (
+          <AnalyticsPage
+            isDark={isDark}
+            analytics={analytics}
+            vendors={vendors}
+            patterns={patterns}
+            activeTab={analyticsTab}
+            onTabChange={setAnalyticsTab}
+            onExport={onExportReport}
+            exporting={exporting}
+          />
+        ) : null}
 
         {activeSection === 'tickets' ? (
           <TicketsPage
@@ -588,9 +676,17 @@ export function AdminDashboard() {
         title={modalState.title}
         description={modalState.description}
         bullets={modalState.bullets}
-        confirmText={modalState.type === 'terminate' ? 'Confirm Termination' : 'Confirm Reactivation'}
+        confirmText={
+          modalState.type === 'terminate'
+            ? 'Confirm Termination'
+            : modalState.type === 'reactivate'
+              ? 'Confirm Reactivation'
+              : modalState.type === 'flag'
+                ? 'Yes, Flag Vendor'
+                : 'Yes, Remove Flag'
+        }
         cancelText="Cancel"
-        danger={modalState.type === 'terminate'}
+        danger={modalState.type === 'terminate' || modalState.type === 'flag'}
         loading={actionBusy}
         onCancel={() => setModalState((prev) => ({ ...prev, open: false }))}
         onConfirm={onConfirmModalAction}

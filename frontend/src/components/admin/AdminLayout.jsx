@@ -36,7 +36,7 @@ export function AdminLayout({
   return (
     <div
       className={[
-        'tw-relative tw-min-h-screen tw-overflow-hidden',
+        'tw-relative tw-min-h-screen tw-overflow-x-hidden',
         isDark ? 'tw-bg-[#081226] tw-text-slate-100' : 'tw-bg-[#eef4fb] tw-text-[#0f172a]',
       ].join(' ')}
       style={{ ...themeVars, backgroundColor: 'var(--admin-page-bg)' }}
@@ -63,17 +63,27 @@ export function AdminLayout({
 
       <div className={[
         'tw-relative tw-z-[1]',
-        collapsed ? 'lg:tw-ml-[104px] tw-transition-[margin] tw-duration-300' : 'lg:tw-ml-[286px] tw-transition-[margin] tw-duration-300',
+        collapsed ? 'lg:tw-ml-[88px] tw-transition-[margin] tw-duration-300' : 'lg:tw-ml-[244px] tw-transition-[margin] tw-duration-300',
       ].join(' ')}>
-        <TopBar
-          isDark={isDark}
-          adminEmail={adminEmail}
-          notifications={notifications}
-          onLogout={onLogout}
-          onToggleMobile={onToggleMobile}
-        />
+        <div className={[
+          'tw-fixed tw-top-0 tw-right-0 tw-z-50 tw-transition-[left] tw-duration-300',
+          collapsed ? 'lg:tw-left-[88px]' : 'lg:tw-left-[244px]',
+          'tw-left-0',
+        ].join(' ')}>
+          <TopBar
+            isDark={isDark}
+            adminEmail={adminEmail}
+            notifications={notifications}
+            onLogout={onLogout}
+            onToggleMobile={onToggleMobile}
+          />
+        </div>
 
-        <main className="tw-p-4 md:tw-p-6 lg:tw-p-8 xl:tw-p-9">{children}</main>
+        <main className="tw-px-3 tw-pt-20 tw-pb-4 md:tw-px-4 md:tw-pt-22 md:tw-pb-5 lg:tw-px-5 lg:tw-pt-22 lg:tw-pb-6">
+          <div className="tw-mx-auto tw-w-full tw-max-w-7xl">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   )

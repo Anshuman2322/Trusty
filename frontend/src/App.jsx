@@ -42,6 +42,7 @@ function RequireVendorAuth({ children }) {
 
 function App() {
   const location = useLocation()
+  const session = getSession()
   const [vendors, setVendors] = useState([])
   const [vendorsLoading, setVendorsLoading] = useState(true)
   const [vendorsError, setVendorsError] = useState('')
@@ -50,6 +51,7 @@ function App() {
   const isMarketingRoute = ['/', '/how-it-works', '/vendor', '/public', '/about', '/transparency'].includes(location.pathname)
   const isVendorWorkspaceRoute = location.pathname.startsWith('/vendor/dashboard') || location.pathname.startsWith('/vendor/analytics')
   const isAdminWorkspaceRoute = location.pathname.startsWith('/admin')
+  const hideTopbar = isAdminWorkspaceRoute || (isVendorWorkspaceRoute && isVendorSession(session))
 
   useEffect(() => {
     let cancelled = false
@@ -102,8 +104,8 @@ function App() {
   }
 
   return (
-    <div className="app">
-      {!isAdminWorkspaceRoute ? (
+    <div className={isAdminWorkspaceRoute ? 'app app--admin' : 'app'}>
+      {!hideTopbar ? (
         <header className="topbar">
         <div className="brand">
           <Link to="/" className="brandLink">

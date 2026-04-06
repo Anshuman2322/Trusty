@@ -12,8 +12,8 @@ export function TopBar({ isDark, adminEmail, notifications, onLogout, onToggleMo
   return (
     <header
       className={[
-        'tw-sticky tw-top-0 tw-z-30 tw-px-1 tw-py-2 md:tw-px-2',
-        isDark ? 'tw-bg-transparent' : 'tw-bg-transparent',
+        'tw-px-1 tw-py-0 md:tw-px-2',
+        isDark ? 'tw-bg-[#081226]/65 tw-backdrop-blur-sm' : 'tw-bg-[#eef4fb]/65 tw-backdrop-blur-sm',
       ].join(' ')}
     >
       <div

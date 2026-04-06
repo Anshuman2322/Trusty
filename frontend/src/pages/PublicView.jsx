@@ -544,7 +544,12 @@ export function PublicView({ vendors, defaultVendorId }) {
     ? (profile?.statusBadge ||
       (vendorAverageScore == null ? 'Private' : vendorTrustDescriptor.replace(/\s+Trust$/i, '')))
     : 'New Vendor'
+  const hasBusinessLogo = Boolean(String(profile?.businessLogo || '').trim())
+  const vendorInitial = String(profile?.name || 'V').trim().charAt(0).toUpperCase() || 'V'
   const profileLocationText = formatLocationText(profile?.location)
+  const additionalInfoHeading = String(profile?.additionalInfo?.heading || '').trim()
+  const additionalInfoResult = String(profile?.additionalInfo?.result || '').trim()
+  const hasAdditionalInfo = Boolean(additionalInfoHeading || additionalInfoResult)
   const feedbackTargetName = String(profile?.name || 'this vendor').trim()
   const textCharacterCount = text.length
   const trimmedLength = text.trim().length
@@ -804,54 +809,67 @@ export function PublicView({ vendors, defaultVendorId }) {
 
             {profile ? (
               <article className="publicVendorSpotlight">
-                <header className="publicVendorSpotlightHead">
-                  <div className="publicVendorIdentity">
-                    <h3>{profile.name}</h3>
-                    <p>
-                      {profile?.businessCategory
-                        ? `${profile.businessCategory} vendor profile`
-                        : 'Verified vendor profile'}
-                    </p>
-                  </div>
-                  <span className={vendorStatusPillClass(vendorStatusText)}>{vendorStatusText}</span>
-                </header>
-
-                <div className="publicVendorSpotlightBody">
-                  <div className="publicVendorRingWrap">
-                    {vendorDisplayScore != null ? (
-                      <div
-                        className={vendorTrustRingClass(vendorDisplayScore)}
-                        style={{ '--ring-progress': `${vendorDisplayScore}%` }}
-                      >
-                        <span>{vendorDisplayScore}</span>
-                      </div>
-                    ) : (
-                      <div className={vendorTrustRingClass(vendorDisplayScore)}>
-                        <span>--</span>
-                      </div>
-                    )}
-                    <p className={`publicVendorTrustCaption publicVendorTrustCaption--${reviewTrustTone(vendorDisplayScore)}`}>
-                      {vendorTrustDescriptor}
-                    </p>
-                  </div>
-
-                  <div className="publicVendorStats">
-                    <div className="publicVendorStatLine">
-                      <ProfileStatIcon kind="trust" />
-                      <span className="publicVendorStatText">
-                        Average Trust Score{' '}
-                        <strong>{hasVendorReviews ? `${vendorAverageScore}/100` : 'Not yet rated'}</strong>
-                      </span>
+                <div className="publicVendorTop">
+                  <div className="publicVendorMain">
+                    <div className="publicVendorIdentity">
+                      <h3>{profile.name}</h3>
+                      <p>
+                        {profile?.businessCategory
+                          ? `${profile.businessCategory} vendor profile`
+                          : 'Verified vendor profile'}
+                      </p>
                     </div>
-                    <div className="publicVendorStatLine">
-                      <ProfileStatIcon kind="feedbacks" />
-                      <span className="publicVendorStatText">
-                        Total Feedbacks <strong>{vendorFeedbackCount}</strong>
-                      </span>
-                    </div>
-                    <div className="publicVendorVerified">
-                      <ProfileStatIcon kind="verified" />
-                      <span>Verified Vendor</span>
+
+                    <div className="publicVendorSpotlightBody publicVendorSpotlightBody--compact">
+                      <div className="publicVendorLogoWrap" aria-label="Vendor logo">
+                        {hasBusinessLogo ? (
+                          <img
+                            src={profile.businessLogo}
+                            alt={`${profile.name || 'Vendor'} logo`}
+                            className="publicVendorLogoLarge"
+                          />
+                        ) : (
+                          <span className="publicVendorLogoFallback">{vendorInitial}</span>
+                        )}
+                      </div>
+
+                      <div className="publicVendorStats">
+                        <div className="publicVendorStatLine">
+                          <ProfileStatIcon kind="trust" />
+                          <span className="publicVendorStatText">
+                            Average Trust Score{' '}
+                            <strong>{hasVendorReviews ? `${vendorAverageScore}/100` : 'Not yet rated'}</strong>
+                          </span>
+                        </div>
+                        <div className="publicVendorStatLine">
+                          <ProfileStatIcon kind="feedbacks" />
+                          <span className="publicVendorStatText">
+                            Total Feedbacks <strong>{vendorFeedbackCount}</strong>
+                          </span>
+                        </div>
+                        <div className="publicVendorVerified">
+                          <ProfileStatIcon kind="verified" />
+                          <span>Verified Vendor</span>
+                        </div>
+                      </div>
+
+                      <div className="publicVendorStatusStack">
+                        <div className="publicVendorRingWrap publicVendorRingWrap--status">
+                          {vendorDisplayScore != null ? (
+                            <div
+                              className={vendorTrustRingClass(vendorDisplayScore)}
+                              style={{ '--ring-progress': `${vendorDisplayScore}%` }}
+                            >
+                              <span>{vendorDisplayScore}</span>
+                            </div>
+                          ) : (
+                            <div className={vendorTrustRingClass(vendorDisplayScore)}>
+                              <span>--</span>
+                            </div>
+                          )}
+                        </div>
+                        <span className={vendorStatusPillClass(vendorStatusText)}>{vendorStatusText}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -889,6 +907,13 @@ export function PublicView({ vendors, defaultVendorId }) {
                   <section className="publicVendorInfoSection publicVendorInfoSection--divider publicVendorDescription">
                     <h4>About This Vendor</h4>
                     <p className="publicVendorInfoText">{profile.description}</p>
+                  </section>
+                ) : null}
+
+                {hasAdditionalInfo ? (
+                  <section className="publicVendorInfoSection publicVendorInfoSection--divider publicVendorDescription">
+                    <h4>{additionalInfoHeading || 'Additional Information'}</h4>
+                    <p className="publicVendorInfoText">{additionalInfoResult || 'Not provided'}</p>
                   </section>
                 ) : null}
               </article>

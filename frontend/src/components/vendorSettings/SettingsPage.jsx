@@ -6,9 +6,11 @@ import { SliderControl } from './SliderControl'
 import { ToggleSwitch } from './ToggleSwitch'
 
 const TAB_ITEMS = [
+  { key: 'security', label: 'Security' },
   { key: 'feedback', label: 'Feedback Settings' },
   { key: 'trustFraud', label: 'Trust & Fraud' },
   { key: 'notifications', label: 'Notifications' },
+  { key: 'privacy', label: 'Privacy' },
   { key: 'system', label: 'System Preferences' },
   { key: 'advanced', label: 'Advanced' },
 ]
@@ -57,6 +59,17 @@ const DEFAULT_SETTINGS = {
     paymentUpdateAlert: true,
     deliveryUpdateAlert: true,
     emailNotifications: true,
+    weeklyReportEmail: false,
+    newFeedbackPush: false,
+    riskAlertsPush: true,
+  },
+  security: {
+    twoFactorAuthEnabled: false,
+  },
+  privacy: {
+    showEmailPublicly: false,
+    showPhonePublicly: false,
+    allowUsageAnalytics: true,
   },
   system: {
     darkMode: false,
@@ -156,6 +169,38 @@ function normalizeSettings(raw = {}) {
         raw?.notifications?.emailNotifications,
         defaults.notifications.emailNotifications
       ),
+      weeklyReportEmail: coerceBoolean(
+        raw?.notifications?.weeklyReportEmail,
+        defaults.notifications.weeklyReportEmail
+      ),
+      newFeedbackPush: coerceBoolean(
+        raw?.notifications?.newFeedbackPush,
+        defaults.notifications.newFeedbackPush
+      ),
+      riskAlertsPush: coerceBoolean(
+        raw?.notifications?.riskAlertsPush,
+        defaults.notifications.riskAlertsPush
+      ),
+    },
+    security: {
+      twoFactorAuthEnabled: coerceBoolean(
+        raw?.security?.twoFactorAuthEnabled,
+        defaults.security.twoFactorAuthEnabled
+      ),
+    },
+    privacy: {
+      showEmailPublicly: coerceBoolean(
+        raw?.privacy?.showEmailPublicly,
+        defaults.privacy.showEmailPublicly
+      ),
+      showPhonePublicly: coerceBoolean(
+        raw?.privacy?.showPhonePublicly,
+        defaults.privacy.showPhonePublicly
+      ),
+      allowUsageAnalytics: coerceBoolean(
+        raw?.privacy?.allowUsageAnalytics,
+        defaults.privacy.allowUsageAnalytics
+      ),
     },
     system: {
       darkMode: coerceBoolean(raw?.system?.darkMode, defaults.system.darkMode),
@@ -210,6 +255,15 @@ function withActiveThemePreference(settings) {
 }
 
 function SectionIcon({ type }) {
+  if (type === 'security') {
+    return (
+      <svg className="tw-h-5 tw-w-5 tw-block" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.9" />
+        <path d="M8.5 10V7.8a3.5 3.5 0 017 0V10" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
   if (type === 'feedback') {
     return (
       <svg className="tw-h-5 tw-w-5 tw-block" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -245,6 +299,15 @@ function SectionIcon({ type }) {
     )
   }
 
+  if (type === 'privacy') {
+    return (
+      <svg className="tw-h-5 tw-w-5 tw-block" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M3 12s3.4-6 9-6 9 6 9 6-3.4 6-9 6-9-6-9-6z" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="2.4" stroke="currentColor" strokeWidth="1.9" />
+      </svg>
+    )
+  }
+
   return (
     <svg className="tw-h-5 tw-w-5 tw-block" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.9" />
@@ -264,7 +327,7 @@ function LoadingSkeleton() {
 }
 
 export function SettingsPage({ vendorId, initialSettings = null, onSettingsSaved = () => {} }) {
-  const [activeTab, setActiveTab] = useState('feedback')
+  const [activeTab, setActiveTab] = useState('security')
   const [form, setForm] = useState(() => {
     const normalized = initialSettings ? normalizeSettings(initialSettings) : cloneDefaults()
     return withActiveThemePreference(normalized)
@@ -274,8 +337,19 @@ export function SettingsPage({ vendorId, initialSettings = null, onSettingsSaved
   )
   const [loading, setLoading] = useState(() => !initialSettings)
   const [saving, setSaving] = useState(false)
+  const [passwordSaving, setPasswordSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
+  const [passwordVisible, setPasswordVisible] = useState({
+    currentPassword: false,
+    newPassword: false,
+    confirmPassword: false,
+  })
 
   const hasUnsavedChanges = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(savedSnapshot),
@@ -367,7 +441,159 @@ export function SettingsPage({ vendorId, initialSettings = null, onSettingsSaved
     setSuccessMessage('Default values restored. Click Save Settings to apply.')
   }
 
+  function updatePasswordField(field, value) {
+    setPasswordForm((state) => ({
+      ...state,
+      [field]: value,
+    }))
+    setErrorMessage('')
+    setSuccessMessage('')
+  }
+
+  function togglePasswordVisibility(field) {
+    setPasswordVisible((state) => ({
+      ...state,
+      [field]: !state[field],
+    }))
+  }
+
+  async function handlePasswordUpdate() {
+    const currentPassword = String(passwordForm.currentPassword || '')
+    const newPassword = String(passwordForm.newPassword || '')
+    const confirmPassword = String(passwordForm.confirmPassword || '')
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setErrorMessage('Please fill current password, new password, and confirm password')
+      return
+    }
+
+    if (newPassword.length < 8) {
+      setErrorMessage('New password must be at least 8 characters long')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setErrorMessage('New password and confirm password do not match')
+      return
+    }
+
+    try {
+      setPasswordSaving(true)
+      setErrorMessage('')
+      setSuccessMessage('')
+
+      const data = await apiPost(`/api/vendor/${vendorId}/settings/password`, {
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      })
+
+      setSuccessMessage(data?.message || 'Password updated successfully')
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      })
+    } catch (error) {
+      setErrorMessage(error?.message || 'Failed to update password')
+    } finally {
+      setPasswordSaving(false)
+    }
+  }
+
   function renderTabContent() {
+    if (activeTab === 'security') {
+      return (
+        <SettingsSection
+          title="Security"
+          subtitle="Change your password and manage account security settings"
+          icon={<SectionIcon type="security" />}
+        >
+          <div className="tw-grid tw-gap-3">
+            <label className="tw-grid tw-gap-1.5">
+              <span className="tw-text-sm tw-font-semibold tw-text-slate-700">Current Password</span>
+              <div className="tw-flex tw-items-center tw-gap-2 tw-rounded-xl tw-border tw-border-slate-300 tw-bg-white tw-px-3 tw-py-2">
+                <input
+                  type={passwordVisible.currentPassword ? 'text' : 'password'}
+                  className="tw-w-full tw-border-0 tw-bg-transparent tw-text-sm tw-text-slate-800 tw-outline-none"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) => updatePasswordField('currentPassword', event.target.value)}
+                  placeholder="Enter current password"
+                />
+                <button
+                  type="button"
+                  className="tw-text-xs tw-font-semibold tw-text-slate-500 hover:tw-text-cyan-700"
+                  onClick={() => togglePasswordVisibility('currentPassword')}
+                >
+                  {passwordVisible.currentPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </label>
+
+            <div className="tw-grid tw-gap-3 md:tw-grid-cols-2">
+              <label className="tw-grid tw-gap-1.5">
+                <span className="tw-text-sm tw-font-semibold tw-text-slate-700">New Password</span>
+                <div className="tw-flex tw-items-center tw-gap-2 tw-rounded-xl tw-border tw-border-slate-300 tw-bg-white tw-px-3 tw-py-2">
+                  <input
+                    type={passwordVisible.newPassword ? 'text' : 'password'}
+                    className="tw-w-full tw-border-0 tw-bg-transparent tw-text-sm tw-text-slate-800 tw-outline-none"
+                    value={passwordForm.newPassword}
+                    onChange={(event) => updatePasswordField('newPassword', event.target.value)}
+                    placeholder="At least 8 characters"
+                  />
+                  <button
+                    type="button"
+                    className="tw-text-xs tw-font-semibold tw-text-slate-500 hover:tw-text-cyan-700"
+                    onClick={() => togglePasswordVisibility('newPassword')}
+                  >
+                    {passwordVisible.newPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </label>
+
+              <label className="tw-grid tw-gap-1.5">
+                <span className="tw-text-sm tw-font-semibold tw-text-slate-700">Confirm Password</span>
+                <div className="tw-flex tw-items-center tw-gap-2 tw-rounded-xl tw-border tw-border-slate-300 tw-bg-white tw-px-3 tw-py-2">
+                  <input
+                    type={passwordVisible.confirmPassword ? 'text' : 'password'}
+                    className="tw-w-full tw-border-0 tw-bg-transparent tw-text-sm tw-text-slate-800 tw-outline-none"
+                    value={passwordForm.confirmPassword}
+                    onChange={(event) => updatePasswordField('confirmPassword', event.target.value)}
+                    placeholder="Re-enter new password"
+                  />
+                  <button
+                    type="button"
+                    className="tw-text-xs tw-font-semibold tw-text-slate-500 hover:tw-text-cyan-700"
+                    onClick={() => togglePasswordVisibility('confirmPassword')}
+                  >
+                    {passwordVisible.confirmPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </label>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                className="tw-rounded-xl tw-border tw-border-cyan-600 tw-bg-cyan-600 tw-px-4 tw-py-2 tw-text-sm tw-font-semibold tw-text-white hover:tw-bg-cyan-700 disabled:tw-opacity-60"
+                onClick={handlePasswordUpdate}
+                disabled={passwordSaving}
+              >
+                {passwordSaving ? 'Updating Password...' : 'Update Password'}
+              </button>
+            </div>
+          </div>
+
+          <ToggleSwitch
+            label="Two-Factor Authentication"
+            description="Add an extra layer of security with OTP verification"
+            checked={form.security.twoFactorAuthEnabled}
+            onChange={(value) => updateSetting('security', 'twoFactorAuthEnabled', value)}
+          />
+        </SettingsSection>
+      )
+    }
+
     if (activeTab === 'feedback') {
       return (
         <SettingsSection
@@ -445,18 +671,43 @@ export function SettingsPage({ vendorId, initialSettings = null, onSettingsSaved
       return (
         <SettingsSection
           title="Notifications"
-          subtitle="Choose which alerts vendors should receive"
+          subtitle="Choose what you get notified about"
           icon={<SectionIcon type="notifications" />}
         >
           <ToggleSwitch
-            label="New Feedback Alert"
+            label="New Feedback (Email)"
+            description="Receive email when new feedback arrives"
             checked={form.notifications.newFeedbackAlert}
             onChange={(value) => updateSetting('notifications', 'newFeedbackAlert', value)}
           />
           <ToggleSwitch
-            label="Low Trust Alert"
+            label="Risk Alerts (Email)"
+            description="Get alerted about suspicious patterns"
             checked={form.notifications.lowTrustAlert}
             onChange={(value) => updateSetting('notifications', 'lowTrustAlert', value)}
+          />
+          <ToggleSwitch
+            label="Weekly Reports (Email)"
+            description="Weekly trust performance digest"
+            checked={form.notifications.weeklyReportEmail}
+            onChange={(value) => updateSetting('notifications', 'weeklyReportEmail', value)}
+          />
+          <ToggleSwitch
+            label="New Feedback (Push)"
+            description="Browser push notification for feedback"
+            checked={form.notifications.newFeedbackPush}
+            onChange={(value) => updateSetting('notifications', 'newFeedbackPush', value)}
+          />
+          <ToggleSwitch
+            label="Risk Alerts (Push)"
+            description="Push notifications for risk alerts"
+            checked={form.notifications.riskAlertsPush}
+            onChange={(value) => updateSetting('notifications', 'riskAlertsPush', value)}
+          />
+          <ToggleSwitch
+            label="Email Notifications"
+            checked={form.notifications.emailNotifications}
+            onChange={(value) => updateSetting('notifications', 'emailNotifications', value)}
           />
           <ToggleSwitch
             label="Fraud Alert"
@@ -473,10 +724,36 @@ export function SettingsPage({ vendorId, initialSettings = null, onSettingsSaved
             checked={form.notifications.deliveryUpdateAlert}
             onChange={(value) => updateSetting('notifications', 'deliveryUpdateAlert', value)}
           />
+        </SettingsSection>
+      )
+    }
+
+    if (activeTab === 'privacy') {
+      return (
+        <SettingsSection
+          title="Privacy"
+          subtitle="Control what information is shared publicly"
+          icon={<SectionIcon type="privacy" />}
+        >
           <ToggleSwitch
-            label="Email Notifications"
-            checked={form.notifications.emailNotifications}
-            onChange={(value) => updateSetting('notifications', 'emailNotifications', value)}
+            label="Show Email Publicly"
+            description="Display your email on public profile"
+            checked={form.privacy.showEmailPublicly}
+            onChange={(value) => updateSetting('privacy', 'showEmailPublicly', value)}
+          />
+
+          <ToggleSwitch
+            label="Show Phone Publicly"
+            description="Display phone number on public profile"
+            checked={form.privacy.showPhonePublicly}
+            onChange={(value) => updateSetting('privacy', 'showPhonePublicly', value)}
+          />
+
+          <ToggleSwitch
+            label="Allow Usage Analytics"
+            description="Help us improve with anonymous usage data"
+            checked={form.privacy.allowUsageAnalytics}
+            onChange={(value) => updateSetting('privacy', 'allowUsageAnalytics', value)}
           />
         </SettingsSection>
       )

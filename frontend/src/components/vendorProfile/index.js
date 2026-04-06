@@ -3,6 +3,7 @@ export { BusinessDetailsForm } from './BusinessDetailsForm'
 export { LocationForm } from './LocationForm'
 export { ContactForm } from './ContactForm'
 export { DescriptionBox } from './DescriptionBox'
+export { AdditionalInfoBox } from './AdditionalInfoBox'
 export { ProfilePreviewCard } from './ProfilePreviewCard'
 export { PublicVisibilityControls } from './PublicVisibilityControls'
 export {

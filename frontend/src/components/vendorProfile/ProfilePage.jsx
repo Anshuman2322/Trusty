@@ -4,6 +4,8 @@ import { setSession } from '../../lib/session'
 import { BusinessDetailsForm } from './BusinessDetailsForm'
 import { ContactForm } from './ContactForm'
 import { DescriptionBox } from './DescriptionBox'
+import { AdditionalInfoBox } from './AdditionalInfoBox'
+import { BrandAssetsBox } from './BrandAssetsBox'
 import { LocationForm } from './LocationForm'
 import { ProfilePreviewCard } from './ProfilePreviewCard'
 import { PublicVisibilityControls } from './PublicVisibilityControls'
@@ -69,6 +71,26 @@ function validateForm(values) {
     errors.description = 'Description must be 1500 characters or less'
   }
 
+  const additionalInfoHeading = String(values.additionalInfoHeading || '').trim()
+  const additionalInfoResult = String(values.additionalInfoResult || '').trim()
+
+  if (additionalInfoHeading.length > 120) {
+    errors.additionalInfoHeading = 'Heading must be 120 characters or less'
+  }
+
+  if (additionalInfoResult.length > 1500) {
+    errors.additionalInfoResult = 'Result/details must be 1500 characters or less'
+  }
+
+  if (additionalInfoResult && !additionalInfoHeading) {
+    errors.additionalInfoHeading = 'Please add a heading for this information'
+  }
+
+  const businessLogo = String(values.businessLogo || '').trim()
+  if (businessLogo && !/^data:image\/(png|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/i.test(businessLogo)) {
+    errors.businessLogo = 'Logo must be a valid PNG or SVG file'
+  }
+
   return errors
 }
 
@@ -109,6 +131,25 @@ function ProfileIcon({ kind }) {
     )
   }
 
+  if (kind === 'additional') {
+    return (
+      <svg className="tw-h-5 tw-w-5 tw-block" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+        <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.9" />
+      </svg>
+    )
+  }
+
+  if (kind === 'assets') {
+    return (
+      <svg className="tw-h-5 tw-w-5 tw-block" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="5" width="16" height="14" rx="2.5" stroke="currentColor" strokeWidth="1.9" />
+        <path d="M8 14l2.4-2.4a1 1 0 011.4 0L14 14l1.8-1.8a1 1 0 011.4 0L19 14" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="9" cy="10" r="1.2" fill="currentColor" />
+      </svg>
+    )
+  }
+
   if (kind === 'preview') {
     return (
       <svg className="tw-h-5 tw-w-5 tw-block" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -137,14 +178,14 @@ function ProfileIcon({ kind }) {
 
 function SectionCard({ title, subtitle, icon, children }) {
   return (
-    <section className="vendorProfileCard tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-white tw-p-5 tw-shadow-soft">
-      <header className="tw-mb-4 tw-flex tw-items-start tw-gap-3">
+    <section className="vendorProfileCard tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-white tw-p-4 tw-shadow-soft md:tw-p-5">
+      <header className="tw-mb-3 tw-flex tw-items-center tw-gap-3">
         <div className="tw-flex tw-h-10 tw-w-10 tw-shrink-0 tw-items-center tw-justify-center tw-overflow-hidden tw-rounded-xl tw-bg-cyan-50 tw-text-cyan-700">
           <ProfileIcon kind={icon} />
         </div>
-        <div>
-          <h3 className="tw-text-base tw-font-bold tw-text-slate-800">{title}</h3>
-          {subtitle ? <p className="tw-text-sm tw-text-slate-500">{subtitle}</p> : null}
+        <div className="tw-min-w-0">
+          <h3 className="tw-m-0 tw-text-base tw-font-bold tw-leading-6 tw-text-slate-800">{title}</h3>
+          {subtitle ? <p className="tw-mb-0 tw-mt-1 tw-text-sm tw-text-slate-500">{subtitle}</p> : null}
         </div>
       </header>
       {children}
@@ -154,7 +195,7 @@ function SectionCard({ title, subtitle, icon, children }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="tw-grid tw-gap-4" aria-hidden="true">
+    <div className="tw-grid tw-gap-3" aria-hidden="true">
       <div className="tw-h-28 tw-animate-pulse tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-slate-100" />
       <div className="tw-h-44 tw-animate-pulse tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-slate-100" />
       <div className="tw-h-44 tw-animate-pulse tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-slate-100" />
@@ -179,11 +220,48 @@ export function ProfilePage({
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [showSaveToast, setShowSaveToast] = useState(false)
 
   const hasUnsavedChanges = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(savedSnapshot),
     [form, savedSnapshot]
   )
+
+  const completion = useMemo(() => {
+    const required = [
+      'businessName',
+      'businessEmail',
+      'businessCategory',
+      'country',
+      'city',
+    ]
+    const recommended = [
+      'businessWebsite',
+      'phoneNumber',
+      'supportEmail',
+      'description',
+      'state',
+      'contactPersonName',
+      'businessId',
+    ]
+
+    const hasValue = (key) => Boolean(String(form?.[key] || '').trim())
+    const filledRequired = required.filter(hasValue).length
+    const filledRecommended = recommended.filter(hasValue).length
+    const score = Math.round(((filledRequired + filledRecommended) / (required.length + recommended.length)) * 100)
+
+    const suggestions = []
+    if (!hasValue('businessWebsite')) suggestions.push('Add website to improve trust visibility.')
+    if (!hasValue('supportEmail')) suggestions.push('Add support email for customer confidence.')
+    if (!hasValue('state')) suggestions.push('Complete state details for better location context.')
+
+    return {
+      score,
+      filledRequired,
+      totalRequired: required.length,
+      suggestions: suggestions.slice(0, 2),
+    }
+  }, [form])
 
   useEffect(() => {
     if (!initialProfile) return
@@ -226,6 +304,25 @@ export function ProfilePage({
     }
   }, [vendorId, overviewTrustScore, initialProfile])
 
+  useEffect(() => {
+    if (!hasUnsavedChanges) return undefined
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = 'You have unsaved profile changes. Are you sure you want to leave?'
+      return event.returnValue
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
+
+  useEffect(() => {
+    if (!showSaveToast) return undefined
+    const timer = window.setTimeout(() => setShowSaveToast(false), 1800)
+    return () => window.clearTimeout(timer)
+  }, [showSaveToast])
+
   function updateField(field, value) {
     setForm((state) => ({ ...state, [field]: value }))
     setErrors((state) => ({ ...state, [field]: '' }))
@@ -243,6 +340,48 @@ export function ProfilePage({
     }))
     setSuccessMessage('')
     setErrorMessage('')
+  }
+
+  function handleLogoClear() {
+    updateField('businessLogo', '')
+  }
+
+  function handleLogoPick(file) {
+    if (!file) return
+
+    const allowedTypes = new Set(['image/png', 'image/svg+xml'])
+    if (!allowedTypes.has(String(file.type || '').toLowerCase())) {
+      setErrors((state) => ({ ...state, businessLogo: 'Only PNG or SVG files are allowed' }))
+      setErrorMessage('')
+      setSuccessMessage('')
+      return
+    }
+
+    const maxBytes = 2 * 1024 * 1024
+    if (file.size > maxBytes) {
+      setErrors((state) => ({ ...state, businessLogo: 'File size must be 2MB or less' }))
+      setErrorMessage('')
+      setSuccessMessage('')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = String(reader.result || '')
+      if (!result.startsWith('data:image/')) {
+        setErrors((state) => ({ ...state, businessLogo: 'Failed to process selected logo' }))
+        return
+      }
+      updateField('businessLogo', result)
+    }
+
+    reader.onerror = () => {
+      setErrors((state) => ({ ...state, businessLogo: 'Failed to read selected logo' }))
+      setErrorMessage('')
+      setSuccessMessage('')
+    }
+
+    reader.readAsDataURL(file)
   }
 
   async function handleSave() {
@@ -265,6 +404,7 @@ export function ProfilePage({
       setForm(normalized)
       setSavedSnapshot(normalized)
       setSuccessMessage(data?.message || 'Profile updated successfully')
+      setShowSaveToast(true)
 
       if (data?.token && data?.user) {
         setSession({ token: data.token, user: data.user })
@@ -279,6 +419,10 @@ export function ProfilePage({
   }
 
   function handleCancel() {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm('Discard unsaved profile changes?')
+      if (!confirmed) return
+    }
     setForm(savedSnapshot)
     setErrors({})
     setSuccessMessage('Changes discarded')
@@ -294,11 +438,11 @@ export function ProfilePage({
   }
 
   return (
-    <div className="vendorProfilePage tw-grid tw-gap-4">
-      <section className="vendorProfileCard tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-white tw-p-5 tw-shadow-soft">
+    <div className="vendorProfilePage tw-grid tw-gap-3">
+      <section className="vendorProfileCard tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-white tw-pb-4 tw-pr-4 tw-pt-3 tw-pl-3 tw-shadow-soft md:tw-pb-5 md:tw-pr-5 md:tw-pt-3 md:tw-pl-3">
         <div className="tw-flex tw-flex-wrap tw-items-start tw-justify-between tw-gap-3">
-          <div>
-            <h2 className="tw-text-xl tw-font-extrabold tw-text-slate-900">Vendor Profile</h2>
+          <div className="tw-flex-1 tw-min-w-[260px] tw-text-left">
+            <h2 className="tw-m-0 tw-text-xl tw-font-extrabold tw-text-slate-900">Vendor Profile</h2>
             <p className="tw-mt-1 tw-text-sm tw-text-slate-500">
               Manage your business identity and contact information.
             </p>
@@ -312,6 +456,23 @@ export function ProfilePage({
           >
             {hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
           </span>
+        </div>
+        <div className="tw-mt-3 tw-w-full">
+          <div className="tw-mb-1 tw-flex tw-items-center tw-justify-between tw-text-xs tw-font-semibold tw-text-slate-600">
+            <span>Profile {completion.score}% complete</span>
+            <span>{completion.filledRequired}/{completion.totalRequired} required</span>
+          </div>
+          <div className="tw-h-2 tw-w-full tw-overflow-hidden tw-rounded-full tw-bg-slate-200">
+            <div
+              className="tw-h-full tw-rounded-full tw-bg-cyan-600 tw-transition-all tw-duration-500"
+              style={{ width: `${completion.score}%` }}
+            />
+          </div>
+          {completion.suggestions.length ? (
+            <ul className="tw-mt-2 tw-grid tw-gap-1 tw-text-xs tw-text-slate-500">
+              {completion.suggestions.map((tip) => <li key={tip}>{tip}</li>)}
+            </ul>
+          ) : null}
         </div>
       </section>
 
@@ -327,8 +488,21 @@ export function ProfilePage({
         </div>
       ) : null}
 
-      <div className="tw-grid tw-gap-4 xl:tw-grid-cols-3">
-        <div className="tw-grid tw-gap-4 xl:tw-col-span-2">
+      <div className="tw-grid tw-gap-3 xl:tw-grid-cols-5">
+        <div className="tw-grid tw-content-start tw-gap-3 xl:tw-col-span-3">
+          <SectionCard
+            title="Brand Assets"
+            subtitle="Upload your company logo for profile and public page"
+            icon="assets"
+          >
+            <BrandAssetsBox
+              logoValue={form.businessLogo}
+              error={errors.businessLogo}
+              onPickFile={handleLogoPick}
+              onClear={handleLogoClear}
+            />
+          </SectionCard>
+
           <SectionCard
             title="Business Details"
             subtitle="Core business identity and registration information"
@@ -364,9 +538,24 @@ export function ProfilePage({
               onChange={(value) => updateField('description', value)}
             />
           </SectionCard>
+
+          <SectionCard
+            title="Additional Category / Information"
+            subtitle="Add any custom category with its heading and result details"
+            icon="additional"
+          >
+            <AdditionalInfoBox
+              headingValue={form.additionalInfoHeading}
+              resultValue={form.additionalInfoResult}
+              headingError={errors.additionalInfoHeading}
+              resultError={errors.additionalInfoResult}
+              onHeadingChange={(value) => updateField('additionalInfoHeading', value)}
+              onResultChange={(value) => updateField('additionalInfoResult', value)}
+            />
+          </SectionCard>
         </div>
 
-        <div className="tw-grid tw-gap-4 tw-content-start">
+        <div className="tw-grid tw-content-start tw-gap-3 xl:tw-col-span-2">
           <SectionCard
             title="Public Profile Visibility"
             subtitle="Choose what users can see on your public profile"
@@ -379,20 +568,22 @@ export function ProfilePage({
           </SectionCard>
 
           <SectionCard
-            title="Public Profile Preview"
-            subtitle="How your vendor profile appears to users"
+            title="Live Preview"
+            subtitle="Updates instantly as you edit your profile"
             icon="preview"
           >
-            <ProfilePreviewCard
-              values={form}
-              trustScore={previewTrustScore}
-              visibility={form.publicVisibility}
-            />
+            <div className="xl:tw-sticky xl:tw-top-[100px]">
+              <ProfilePreviewCard
+                values={form}
+                trustScore={previewTrustScore}
+                visibility={form.publicVisibility}
+              />
+            </div>
           </SectionCard>
 
-          <section className="vendorProfileCard tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-slate-50 tw-p-4 tw-shadow-soft">
+          <section className="vendorProfileCard tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-slate-50 tw-p-3.5 tw-shadow-soft">
             <h3 className="tw-text-sm tw-font-bold tw-text-slate-800">Quick Tips</h3>
-            <ul className="tw-mt-2 tw-grid tw-gap-2 tw-text-xs tw-text-slate-600">
+            <ul className="tw-mt-1.5 tw-grid tw-gap-1.5 tw-text-xs tw-text-slate-600">
               <li>Use a support email customers actively monitor.</li>
               <li>Keep your business description concise and trustworthy.</li>
               <li>Set accurate location details for profile credibility.</li>
@@ -401,8 +592,12 @@ export function ProfilePage({
         </div>
       </div>
 
-      <section className="vendorProfileCard tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-white tw-p-4 tw-shadow-soft">
-        <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-end tw-gap-2">
+      <section className="vendorProfileCard tw-sticky tw-bottom-3 tw-z-20 tw-rounded-2xl tw-border tw-border-slate-200 tw-bg-white/95 tw-p-3 tw-shadow-soft tw-backdrop-blur">
+        <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2">
+          <div className="tw-text-xs tw-font-medium tw-text-slate-500">
+            {saving ? 'Saving...' : hasUnsavedChanges ? 'You have unsaved changes' : 'All changes saved'}
+          </div>
+          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
           <button
             type="button"
             className="tw-rounded-xl tw-border tw-border-slate-300 tw-bg-white tw-px-4 tw-py-2 tw-text-sm tw-font-semibold tw-text-slate-700 hover:tw-bg-slate-50"
@@ -419,8 +614,15 @@ export function ProfilePage({
           >
             {saving ? 'Saving Changes...' : 'Save Changes'}
           </button>
+          </div>
         </div>
       </section>
+
+      {showSaveToast ? (
+        <div className="tw-fixed tw-bottom-4 tw-right-4 tw-z-30 tw-rounded-lg tw-border tw-border-emerald-200 tw-bg-emerald-50 tw-px-3 tw-py-2 tw-text-xs tw-font-semibold tw-text-emerald-700 tw-shadow-lg">
+          All changes saved
+        </div>
+      ) : null}
     </div>
   )
 }

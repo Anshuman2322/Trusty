@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react'
 import { normalizePublicVisibility } from './constants'
 
 function toneClass(score) {
@@ -42,14 +43,15 @@ function buildPublicLocation(values, visibility) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-p-2.5">
+    <div className="tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-p-2 tw-shadow-[0_1px_0_rgba(15,23,42,0.02)]">
       <p className="tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-slate-500">{label}</p>
-      <p className="tw-mt-0.5 tw-text-sm tw-font-medium tw-text-slate-700">{value}</p>
+      <p className="tw-mt-0.5 tw-break-words tw-text-sm tw-font-medium tw-leading-snug tw-text-slate-700">{value}</p>
     </div>
   )
 }
 
 export function ProfilePreviewCard({ values, trustScore, visibility }) {
+  const [pulse, setPulse] = useState(false)
   const publicVisibility = normalizePublicVisibility(visibility)
   const hasTrustScore = Number.isFinite(Number(trustScore))
   const safeScore = hasTrustScore ? Math.max(0, Math.min(100, Math.round(Number(trustScore)))) : null
@@ -104,6 +106,10 @@ export function ProfilePreviewCard({ values, trustScore, visibility }) {
   ].filter((row) => row.visible)
 
   const showDescription = publicVisibility.description
+  const showAdditionalInfo = publicVisibility.additionalInfo
+  const additionalInfoHeading = textValue(values.additionalInfoHeading, 'Additional Information')
+  const additionalInfoResult = textValue(values.additionalInfoResult)
+  const hasAdditionalInfo = Boolean(String(values.additionalInfoHeading || '').trim() || String(values.additionalInfoResult || '').trim())
   const showName = publicVisibility.businessName
   const showCategory = publicVisibility.businessCategory
   const hasVisibleLocation = Boolean(location)
@@ -113,41 +119,75 @@ export function ProfilePreviewCard({ values, trustScore, visibility }) {
     showTrustScore ||
     hasVisibleLocation ||
     detailRows.length > 0 ||
-    showDescription
+    showDescription ||
+    (showAdditionalInfo && hasAdditionalInfo)
+
+  const previewSignature = useMemo(() => {
+    return JSON.stringify({
+      businessName: values.businessName,
+      businessCategory: values.businessCategory,
+      city: values.city,
+      state: values.state,
+      country: values.country,
+      supportEmail: values.supportEmail,
+      phoneNumber: values.phoneNumber,
+      description: values.description,
+      additionalInfoHeading: values.additionalInfoHeading,
+      additionalInfoResult: values.additionalInfoResult,
+      trustScore: safeScore,
+      visibility: publicVisibility,
+    })
+  }, [values, safeScore, publicVisibility])
+
+  useEffect(() => {
+    setPulse(true)
+    const timer = window.setTimeout(() => setPulse(false), 260)
+    return () => window.clearTimeout(timer)
+  }, [previewSignature])
 
   return (
-    <article className="tw-rounded-2xl tw-border tw-border-cyan-100 tw-bg-gradient-to-br tw-from-cyan-50 tw-to-white tw-p-4 tw-shadow-soft">
+    <article className={`tw-rounded-xl tw-border tw-border-cyan-100 tw-bg-gradient-to-br tw-from-cyan-50 tw-via-cyan-50/60 tw-to-white tw-p-3 tw-shadow-md tw-transition-all hover:tw-shadow-lg ${pulse ? 'tw-scale-[1.01]' : 'tw-scale-100'}`}>
       <div className="tw-flex tw-items-start tw-justify-between tw-gap-3">
         <div>
-          <p className="tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wide tw-text-cyan-700">Public Profile Preview</p>
-          <h3 className="tw-mt-1 tw-text-lg tw-font-bold tw-text-slate-800">
+          <p className="tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wide tw-text-cyan-700">Live Preview</p>
+          <h3 className="tw-mt-0.5 tw-text-lg tw-font-bold tw-leading-tight tw-text-slate-800">
             {showName ? textValue(values.businessName, 'Business Name') : 'Private Vendor'}
           </h3>
         </div>
 
-        {showCategory ? (
-          <span className="tw-rounded-full tw-border tw-border-cyan-200 tw-bg-cyan-50 tw-px-2.5 tw-py-1 tw-text-xs tw-font-semibold tw-text-cyan-700">
-            {textValue(values.businessCategory, 'Other')}
-          </span>
-        ) : null}
+        <div className="tw-flex tw-items-start tw-gap-2">
+          {showCategory ? (
+            <span className="tw-rounded-full tw-border tw-border-cyan-200 tw-bg-cyan-50 tw-px-2.5 tw-py-1 tw-text-xs tw-font-semibold tw-text-cyan-700">
+              {textValue(values.businessCategory, 'Other')}
+            </span>
+          ) : null}
+
+          {String(values.businessLogo || '').trim() ? (
+            <img
+              src={values.businessLogo}
+              alt="Business logo"
+              className="tw-h-10 tw-w-10 tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-object-contain tw-p-1"
+            />
+          ) : null}
+        </div>
       </div>
 
       {!hasVisibleContent ? (
-        <div className="tw-mt-4 tw-rounded-xl tw-border tw-border-dashed tw-border-slate-300 tw-bg-white tw-p-3 tw-text-sm tw-text-slate-600">
+        <div className="tw-mt-2.5 tw-rounded-xl tw-border tw-border-dashed tw-border-slate-300 tw-bg-white tw-p-2.5 tw-text-sm tw-text-slate-600">
           All fields are currently hidden from public profile.
         </div>
       ) : null}
 
-      <div className="tw-mt-4 tw-grid tw-gap-3">
-        <div className="tw-grid tw-gap-3 sm:tw-grid-cols-[auto_1fr] sm:tw-items-center">
+      <div className="tw-mt-2.5 tw-grid tw-gap-2">
+        <div className="tw-grid tw-gap-2 sm:tw-grid-cols-[auto_1fr] sm:tw-items-center">
           {showTrustScore ? (
             <div
-              className="tw-grid tw-h-[78px] tw-w-[78px] tw-place-items-center tw-rounded-full"
+              className="tw-grid tw-h-[72px] tw-w-[72px] tw-place-items-center tw-rounded-full"
               style={{ background: `conic-gradient(${ringColor} ${safeScore ?? 0}%, #e2e8f0 0)` }}
               aria-label="Trust score ring"
             >
-              <div className="tw-grid tw-h-[62px] tw-w-[62px] tw-place-items-center tw-rounded-full tw-bg-white tw-text-center tw-shadow-inner">
-                <strong className={`tw-text-xl tw-font-extrabold ${toneClass(safeScore)}`}>
+              <div className="tw-grid tw-h-[58px] tw-w-[58px] tw-place-items-center tw-rounded-full tw-bg-white tw-text-center tw-shadow-inner">
+                <strong className={`tw-text-lg tw-font-extrabold ${toneClass(safeScore)}`}>
                   {hasTrustScore ? safeScore : '--'}
                 </strong>
               </div>
@@ -158,10 +198,10 @@ export function ProfilePreviewCard({ values, trustScore, visibility }) {
             </div>
           )}
 
-          <div className="tw-grid tw-gap-2">
+          <div className="tw-grid tw-gap-1.5">
             <div>
               <p className="tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wide tw-text-slate-500">Location</p>
-              <p className="tw-text-sm tw-font-medium tw-text-slate-700">
+              <p className="tw-text-sm tw-font-medium tw-leading-snug tw-text-slate-700">
                 {hasVisibleLocation ? location : 'Location Hidden'}
               </p>
             </div>
@@ -169,14 +209,14 @@ export function ProfilePreviewCard({ values, trustScore, visibility }) {
             {showTrustScore ? (
               <div>
                 <p className="tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wide tw-text-slate-500">Trust Score</p>
-                <p className={`tw-text-sm tw-font-semibold ${toneClass(safeScore)}`}>{trustLabel(safeScore)}</p>
+                <p className={`tw-text-sm tw-font-semibold tw-leading-snug ${toneClass(safeScore)}`}>{trustLabel(safeScore)}</p>
               </div>
             ) : null}
           </div>
         </div>
 
         {detailRows.length > 0 ? (
-          <div className="tw-grid tw-gap-2 sm:tw-grid-cols-2">
+          <div className="tw-grid tw-gap-1.5 sm:tw-grid-cols-2">
             {detailRows.map((row) => (
               <DetailRow key={row.key} label={row.label} value={row.value} />
             ))}
@@ -184,9 +224,16 @@ export function ProfilePreviewCard({ values, trustScore, visibility }) {
         ) : null}
 
         {showDescription ? (
-          <div className="tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-p-2.5">
+          <div className="tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-p-2">
             <p className="tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-slate-500">Business Description</p>
-            <p className="tw-mt-1 tw-text-sm tw-text-slate-700">{textValue(values.description)}</p>
+            <p className="tw-mt-0.5 tw-text-sm tw-leading-snug tw-text-slate-700">{textValue(values.description)}</p>
+          </div>
+        ) : null}
+
+        {showAdditionalInfo && hasAdditionalInfo ? (
+          <div className="tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-p-2">
+            <p className="tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-slate-500">{additionalInfoHeading}</p>
+            <p className="tw-mt-0.5 tw-text-sm tw-leading-snug tw-text-slate-700">{additionalInfoResult}</p>
           </div>
         ) : null}
       </div>

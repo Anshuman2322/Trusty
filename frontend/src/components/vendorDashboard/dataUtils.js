@@ -181,34 +181,52 @@ export function buildQuickInsights({ orders = [], feedbacks = [], averageTrustSc
   const repeatCustomers = [...customerFrequency.values()].filter((count) => count > 1).length
   const lowTrustCount = feedbacks.filter((f) => normalizeScore(f?.trustScore) < 40).length
 
+  const trustDirection = trustDeltaPct >= 0 ? 'improving' : 'declining'
+  const trustDeltaLabel = `${trustDeltaPct >= 0 ? '+' : ''}${trustDeltaPct}%`
+
   return [
     {
       key: 'trust-delta',
-      icon: 'TREND',
+      icon: 'success',
       tone: trustDeltaPct >= 0 ? 'good' : 'warn',
-      title: `${trustDeltaPct >= 0 ? '+' : ''}${trustDeltaPct}% trust score change this week`,
-      detail: `Current average trust score is ${normalizeScore(averageTrustScore)}.`,
+      title: `Your trust score is ${trustDirection} (${trustDeltaLabel})`,
+      detail:
+        trustDeltaPct >= 0
+          ? `Last 7 days trend is positive. Current average trust score is ${normalizeScore(averageTrustScore)}.`
+          : `Last 7 days trend is softer. Current average trust score is ${normalizeScore(averageTrustScore)}.`,
+    },
+    {
+      key: 'verified-feedback',
+      icon: 'info',
+      tone: repeatCustomers > 0 ? 'good' : 'info',
+      title: repeatCustomers > 0
+        ? 'Verified and repeat customer signals are boosting trust quality'
+        : 'Increase verified feedback requests to strengthen trust quality',
+      detail: `${repeatCustomers} repeat customer profile${repeatCustomers === 1 ? '' : 's'} detected from ${orders.length} total orders.`,
     },
     {
       key: 'suspicious',
-      icon: 'RISK',
+      icon: 'warning',
       tone: suspiciousCount > 0 ? 'warn' : 'good',
-      title: `${suspiciousCount} suspicious feedback detected`,
-      detail: 'Risk patterns are monitored instead of hidden.',
-    },
-    {
-      key: 'repeat-customers',
-      icon: 'LOYAL',
-      tone: repeatCustomers > 0 ? 'good' : 'neutral',
-      title: `${repeatCustomers} repeat customers identified`,
-      detail: 'Customer loyalty signal derived from order frequency.',
+      title: suspiciousCount > 0
+        ? 'Low-quality feedback patterns detected in recent activity'
+        : 'No suspicious feedback spikes detected in recent activity',
+      detail:
+        suspiciousCount > 0
+          ? `${suspiciousCount} feedback item${suspiciousCount === 1 ? '' : 's'} flagged for risk monitoring.`
+          : 'Risk checks are stable across device and network signals.',
     },
     {
       key: 'low-trust',
-      icon: 'ALERT',
+      icon: 'warning',
       tone: lowTrustCount > 0 ? 'danger' : 'good',
-      title: `${lowTrustCount} low trust review needs attention`,
-      detail: 'Investigate details and response strategy.',
+      title: lowTrustCount > 0
+        ? `${lowTrustCount} low-trust review${lowTrustCount === 1 ? '' : 's'} should be reviewed`
+        : 'No low-trust reviews require escalation right now',
+      detail:
+        lowTrustCount > 0
+          ? 'Consider requesting verified follow-up feedback to recover confidence.'
+          : 'Maintain momentum by continuing verified fulfillment and response quality.',
     },
   ]
 }

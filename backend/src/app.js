@@ -8,6 +8,7 @@ const { registerRoutes } = require('./routes');
 
 function createApp() {
   const app = express();
+  const requestBodyLimit = String(process.env.REQUEST_BODY_LIMIT || '5mb').trim() || '5mb';
 
   // ✅ SUPER SAFE CORS FIX
   app.use((req, res, next) => {
@@ -24,7 +25,8 @@ function createApp() {
   app.use(cors()); // optional but keep
 
   app.use(helmet());
-  app.use(express.json({ limit: '256kb' }));
+  app.use(express.json({ limit: requestBodyLimit }));
+  app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
   app.use(morgan('dev'));
 
   app.get('/api/health', (req, res) => {

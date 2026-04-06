@@ -78,12 +78,12 @@
 .container.container--workspace {
   max-width: none;
   margin: 0;
-  padding: 20px clamp(12px, 2vw, 26px) 28px;
+  padding: 0 clamp(12px, 2vw, 26px) 28px;
 }
 
 @media (max-width: 1023px) {
   .container.container--workspace {
-    padding: 16px 12px 22px;
+    padding: 0 12px 22px;
   }
 }
 
@@ -6084,9 +6084,9 @@ body[data-theme='dark'] .publicPage .kv {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.86);
   box-shadow: none;
-  padding: 14px;
+  padding: 12px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 body[data-theme='dark'] .publicVendorSpotlight {
@@ -6094,9 +6094,22 @@ body[data-theme='dark'] .publicVendorSpotlight {
   box-shadow: none;
 }
 
+.publicVendorTop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.publicVendorMain {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
 .publicVendorSpotlightHead {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
@@ -6106,19 +6119,26 @@ body[data-theme='dark'] .publicVendorSpotlight {
   margin: 0;
   color: var(--pv-text);
   font-size: clamp(1.25rem, 2vw, 1.55rem);
-  line-height: 1.2;
+  line-height: 1.08;
 }
 
 .publicVendorIdentity {
   display: grid;
-  gap: 4px;
+  gap: 0;
 }
 
 .publicVendorIdentity p {
-  margin: 0;
+  margin: -3px 0 0;
   color: var(--pv-muted);
-  font-size: 0.84rem;
-  line-height: 1.5;
+  font-size: 0.86rem;
+  line-height: 1.12;
+}
+
+.publicVendorStatusStack {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  align-self: center;
 }
 
 .publicVendorStatus {
@@ -6198,10 +6218,74 @@ body[data-theme='dark'] .publicVendorStatus--private {
   align-items: center;
 }
 
+.publicVendorSpotlightBody--compact {
+  grid-template-columns: minmax(120px, 144px) 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
 .publicVendorRingWrap {
   display: grid;
   justify-items: center;
   gap: 8px;
+}
+
+.publicVendorRingWrap--status {
+  justify-items: end;
+}
+
+.publicVendorRingWrap--status .publicVendorRing {
+  width: 82px;
+  height: 82px;
+}
+
+.publicVendorRingWrap--status .publicVendorRing::before {
+  inset: 9px;
+}
+
+.publicVendorRingWrap--status .publicVendorRing span {
+  font-size: 1.35rem;
+}
+
+.publicVendorLogoWrap {
+  width: 120px;
+  height: 120px;
+  border-radius: 18px;
+  border: 1px solid var(--pv-border);
+  background: rgba(255, 255, 255, 0.94);
+  display: grid;
+  place-items: center;
+}
+
+body[data-theme='dark'] .publicVendorLogoWrap {
+  background: rgba(7, 20, 43, 0.86);
+}
+
+.publicVendorLogoLarge {
+  width: 102px;
+  height: 102px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.publicVendorLogoFallback {
+  width: 102px;
+  height: 102px;
+  border-radius: 12px;
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  background: linear-gradient(180deg, rgba(236, 253, 255, 0.9), rgba(224, 242, 254, 0.9));
+  color: #0f6076;
+  display: grid;
+  place-items: center;
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+body[data-theme='dark'] .publicVendorLogoFallback {
+  border-color: rgba(103, 232, 249, 0.28);
+  background: linear-gradient(180deg, rgba(8, 47, 73, 0.65), rgba(8, 47, 73, 0.42));
+  color: #9ce9f7;
 }
 
 .publicVendorRing {
@@ -7306,6 +7390,11 @@ body[data-theme='dark'] .explainFormula {
     line-height: 1.4;
   }
 
+  .publicVendorTop {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
   .publicVendorSpotlight {
     padding: 14px;
   }
@@ -7315,7 +7404,21 @@ body[data-theme='dark'] .explainFormula {
     gap: 14px;
   }
 
+  .publicVendorSpotlightBody--compact {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
   .publicVendorRingWrap {
+    justify-items: start;
+  }
+
+  .publicVendorStatusStack {
+    width: 100%;
+    justify-items: start;
+  }
+
+  .publicVendorRingWrap--status {
     justify-items: start;
   }
 
@@ -7432,6 +7535,10 @@ body[data-theme='dark'] .explainFormula {
 /* Global responsive shell upgrades */
 .app {
   overflow-x: clip;
+}
+
+.app--admin {
+  overflow: visible;
 }
 
 .topbarMenuButton {
