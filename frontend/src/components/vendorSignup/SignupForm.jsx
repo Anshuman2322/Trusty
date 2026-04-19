@@ -11,6 +11,14 @@ const CATEGORY_OPTIONS = [
   { label: 'Services', value: 'Services' },
   { label: 'Retail', value: 'Retail' },
   { label: 'Food', value: 'Food' },
+  { label: 'Pharmaceutical Exporter', value: 'Pharmaceutical Exporter' },
+  { label: 'General Store', value: 'General Store' },
+  { label: 'Pharmacy', value: 'Pharmacy' },
+  { label: 'Healthcare', value: 'Healthcare' },
+  { label: 'AI Engineer', value: 'AI Engineer' },
+  { label: 'Developer', value: 'Developer' },
+  { label: 'DevOps Engineer', value: 'DevOps Engineer' },
+  { label: 'Freelancer', value: 'Freelancer' },
   { label: 'Other', value: 'Other' },
 ]
 

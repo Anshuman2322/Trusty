@@ -15,6 +15,7 @@ import { VendorDashboard } from './pages/VendorDashboard'
 import { VendorAnalyticsPage } from './pages/VendorAnalyticsPage'
 import { AdminDashboard } from './pages/AdminDashboard'
 import { Chatbot } from './components/Chatbot'
+import { Footer } from './components/Footer'
 import { apiGet } from './lib/api'
 import { getSession } from './lib/session'
 
@@ -48,6 +49,7 @@ function App() {
   const [vendorsError, setVendorsError] = useState('')
   const [theme, setTheme] = useState(getInitialTheme)
   const [topbarMenuOpen, setTopbarMenuOpen] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false)
   const isMarketingRoute = ['/', '/how-it-works', '/vendor', '/public', '/about', '/transparency'].includes(location.pathname)
   const isVendorWorkspaceRoute = location.pathname.startsWith('/vendor/dashboard') || location.pathname.startsWith('/vendor/analytics')
   const isAdminWorkspaceRoute = location.pathname.startsWith('/admin')
@@ -99,18 +101,58 @@ function App() {
     setTopbarMenuOpen(false)
   }, [location.pathname, location.search])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.scrollTo(0, 0)
+  }, [location.pathname, location.search])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const onScroll = () => {
+      setIsScrolled(window.scrollY > 10)
+    }
+
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   function onToggleTheme() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
+  }
+
+  function onNavItemClick() {
+    setTopbarMenuOpen(false)
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    }
   }
 
   return (
     <div className={isAdminWorkspaceRoute ? 'app app--admin' : 'app'}>
       {!hideTopbar ? (
-        <header className="topbar">
+        <header
+          className={`topbar sticky top-0 z-50 !min-h-[64px] !items-center !gap-3 !border-b transition-all duration-300 ${
+            isScrolled
+              ? '!border-gray-200 !bg-white !shadow-sm'
+              : '!border-transparent !bg-white/70 !shadow-none !backdrop-blur-md'
+          }`}
+          style={{ position: 'sticky', top: 0, zIndex: 50 }}
+        >
         <div className="brand">
-          <Link to="/" className="brandLink">
-            <div className="brandTitle">Trusty</div>
-            <div className="brandSubtitle">Privacy-safe AI verification with blockchain proof</div>
+          <Link to="/" className="brandLink !leading-tight" aria-label="TrustLens home">
+            <span className="brandMark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" className="brandMarkIcon">
+                <path d="M12 3l7 3v5c0 5-3.2 8.6-7 10-3.8-1.4-7-5-7-10V6l7-3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="brandIdentity">
+              <span className="brandTitle !font-bold !tracking-[0.02em]">
+                Trust<span className="brandAccent">Lens</span>
+              </span>
+              <span className="brandSubtitle !text-slate-500">Privacy-safe AI verification with blockchain proof</span>
+            </span>
           </Link>
         </div>
 
@@ -126,27 +168,80 @@ function App() {
         </button>
 
         <div id="topbar-actions" className={topbarMenuOpen ? 'topbarActions is-open' : 'topbarActions'}>
-          <nav className="nav">
-            <NavLink className={({ isActive }) => (isActive ? 'navLink active' : 'navLink')} to="/" onClick={() => setTopbarMenuOpen(false)}>
+          <nav className="nav !items-center !gap-4 lg:!gap-[18px]">
+            <NavLink
+              className={({ isActive }) =>
+                `navLink !rounded-full !px-[14px] !py-[6px] !font-medium !text-[#475569] !transition-colors !duration-200 hover:!text-[#0ea5e9] ${
+                  isActive ? '!bg-[#e0f2fe] !text-[#0284c7]' : ''
+                }`
+              }
+              to="/"
+              onClick={onNavItemClick}
+            >
               Home
             </NavLink>
-            <NavLink className={({ isActive }) => (isActive ? 'navLink active' : 'navLink')} to="/how-it-works" onClick={() => setTopbarMenuOpen(false)}>
+            <NavLink
+              className={({ isActive }) =>
+                `navLink !rounded-full !px-[14px] !py-[6px] !font-medium !text-[#475569] !transition-colors !duration-200 hover:!text-[#0ea5e9] ${
+                  isActive ? '!bg-[#e0f2fe] !text-[#0284c7]' : ''
+                }`
+              }
+              to="/how-it-works"
+              onClick={onNavItemClick}
+            >
               How It Works
             </NavLink>
-            <NavLink className={({ isActive }) => (isActive ? 'navLink active' : 'navLink')} to="/public" onClick={() => setTopbarMenuOpen(false)}>
+            <NavLink
+              className={({ isActive }) =>
+                `navLink !rounded-full !px-[14px] !py-[6px] !font-medium !text-[#475569] !transition-colors !duration-200 hover:!text-[#0ea5e9] ${
+                  isActive ? '!bg-[#e0f2fe] !text-[#0284c7]' : ''
+                }`
+              }
+              to="/public"
+              onClick={onNavItemClick}
+            >
               Reviews
             </NavLink>
-            <NavLink className={({ isActive }) => (isActive ? 'navLink active' : 'navLink')} to="/vendor" onClick={() => setTopbarMenuOpen(false)}>
+            <NavLink
+              className={({ isActive }) =>
+                `navLink !rounded-full !px-[14px] !py-[6px] !font-medium !text-[#475569] !transition-colors !duration-200 hover:!text-[#0ea5e9] ${
+                  isActive ? '!bg-[#e0f2fe] !text-[#0284c7]' : ''
+                }`
+              }
+              to="/vendor"
+              onClick={onNavItemClick}
+            >
               Vendors
             </NavLink>
-            <NavLink className={({ isActive }) => (isActive ? 'navLink active' : 'navLink')} to="/transparency" onClick={() => setTopbarMenuOpen(false)}>
+            <NavLink
+              className={({ isActive }) =>
+                `navLink !rounded-full !px-[14px] !py-[6px] !font-medium !text-[#475569] !transition-colors !duration-200 hover:!text-[#0ea5e9] ${
+                  isActive ? '!bg-[#e0f2fe] !text-[#0284c7]' : ''
+                }`
+              }
+              to="/transparency"
+              onClick={onNavItemClick}
+            >
               Transparency
             </NavLink>
-            <NavLink className={({ isActive }) => (isActive ? 'navLink active' : 'navLink')} to="/about" onClick={() => setTopbarMenuOpen(false)}>
+            <NavLink
+              className={({ isActive }) =>
+                `navLink !rounded-full !px-[14px] !py-[6px] !font-medium !text-[#475569] !transition-colors !duration-200 hover:!text-[#0ea5e9] ${
+                  isActive ? '!bg-[#e0f2fe] !text-[#0284c7]' : ''
+                }`
+              }
+              to="/about"
+              onClick={onNavItemClick}
+            >
               About
             </NavLink>
           </nav>
-          <button type="button" className="themeToggle" onClick={onToggleTheme} aria-label="Toggle color theme">
+          <button
+            type="button"
+            className="themeToggle !rounded-full !border !border-[#e5e7eb] !px-3 !py-1.5 !shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+            onClick={onToggleTheme}
+            aria-label="Toggle color theme"
+          >
             <span className={theme === 'light' ? 'themeIcon active' : 'themeIcon'}>☀️</span>
             <span className="themeDivider">/</span>
             <span className={theme === 'dark' ? 'themeIcon active' : 'themeIcon'}>🌙</span>
@@ -196,11 +291,7 @@ function App() {
         </Routes>
       </main>
 
-      {!isAdminWorkspaceRoute ? (
-        <footer className="footer">
-        <div className="muted">Public pages are open. Vendor and Admin dashboards require login.</div>
-        </footer>
-      ) : null}
+      <Footer />
 
       {!isAdminWorkspaceRoute ? <Chatbot /> : null}
     </div>

@@ -47,6 +47,15 @@ function SidebarIcon({ kind }) {
     )
   }
 
+  if (kind === 'leads') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 7h14M5 12h14M5 17h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="17.5" cy="17.5" r="3.5" stroke="currentColor" strokeWidth="1.8" />
+      </svg>
+    )
+  }
+
   if (kind === 'analytics') {
     return (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -101,6 +110,7 @@ const MENU_ITEMS = [
   { key: 'payments', label: 'Payments', icon: 'payments' },
   { key: 'feedback', label: 'Feedback', icon: 'feedback' },
   { key: 'messages', label: 'Messages', icon: 'messages' },
+  { key: 'leads', label: 'Leads', icon: 'leads' },
   { key: 'analytics', label: 'Analytics', icon: 'analytics' },
   { key: 'customers', label: 'Customers', icon: 'customers' },
   { key: 'profile', label: 'Profile', icon: 'profile' },

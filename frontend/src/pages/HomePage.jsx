@@ -99,29 +99,29 @@ export function HomePage({ vendors, defaultVendorId }) {
 
   return (
     <div className="lpPage">
-      <section className="lpHero lpHomeSingle revealUp" style={{ '--reveal-delay': '0ms' }}>
-        <div className="lpSectionInner lpSectionInner--hero">
-          <div className="lpHeroPill">
+      <section className="lpHero lpHomeSingle revealUp !rounded-[28px] !border !border-slate-200/90 !bg-gradient-to-b !from-sky-50/70 !to-white !py-16 md:!py-20 !shadow-[0_18px_45px_rgba(15,23,42,0.08)] ![animation-duration:460ms]" style={{ '--reveal-delay': '0ms' }}>
+        <div className="lpSectionInner lpSectionInner--hero !mx-auto !max-w-4xl !items-start !gap-8">
+          <div className="lpHeroPill !border-sky-200/80 !bg-white/85 !shadow-sm">
             <Icon kind="shield" />
             <span>AI + Blockchain Powered</span>
           </div>
 
-          <h1>
-            Trust <span className="lpTextAccent">Verified,</span>
+          <h1 className="!text-4xl !font-extrabold !leading-[1.08] !tracking-[-0.02em] md:!text-5xl lg:!text-[3.35rem]">
+            Trust <span className="lpTextAccent !bg-gradient-to-r !from-sky-600 !to-cyan-500 !bg-clip-text !text-transparent">Verified,</span>
             <br />
             <span className="lpTextMuted">Not Assumed</span>
           </h1>
 
-          <p>
+          <p className="!max-w-2xl !text-slate-600 !leading-8 md:!text-[1.075rem]">
             Trusty eliminates fake reviews using behavioral analysis, explainable AI scoring, and
             blockchain verification while preserving complete user privacy.
           </p>
 
-          <div className="lpHeroActions">
-            <Link className="lpBtn lpBtn--primary" to={publicLink}>
+          <div className="lpHeroActions !mt-2 !gap-3">
+            <Link className="lpBtn lpBtn--primary !rounded-lg !border-0 !bg-gradient-to-r !from-sky-600 !to-cyan-500 !px-6 !py-3 !text-white !shadow-[0_12px_24px_rgba(2,132,199,0.24)] !transition-all !duration-300 hover:!scale-[1.02] hover:!shadow-[0_16px_30px_rgba(2,132,199,0.32)]" to={publicLink}>
               Start Verifying
             </Link>
-            <Link className="lpBtn lpBtn--outline" to={publicLink}>
+            <Link className="lpBtn lpBtn--outline !rounded-lg !border !border-slate-200 !bg-white/80 !px-6 !py-3 !text-slate-700 !transition-colors !duration-200 hover:!bg-slate-50" to={publicLink}>
               View Public Feedback
             </Link>
           </div>
@@ -141,7 +141,7 @@ export function HomePage({ vendors, defaultVendorId }) {
           </div>
         </div>
 
-        <div className="lpSectionInner lpHomeSingleBlock">
+        <div className="lpSectionInner lpHomeSingleBlock !pt-6 md:!pt-8">
           <div className="lpSectionHead lpSectionHead--center lpTransparencyHead">
             <h2>Built for Transparency</h2>
             <p className="lpTransparencyLead">
@@ -163,7 +163,7 @@ export function HomePage({ vendors, defaultVendorId }) {
           </div>
         </div>
 
-        <div className="lpSectionInner lpSectionInner--cta lpHomeSingleBlock lpHomeSingleCta">
+        <div className="lpSectionInner lpSectionInner--cta lpHomeSingleBlock lpHomeSingleCta !border-t !border-slate-200/80 !pt-8 md:!pt-10">
           <h2>Ready to verify trust at scale?</h2>
           <p>Explore live public feedback or submit verified feedback through the Trusty public flow.</p>
           <div className="lpHeroActions">

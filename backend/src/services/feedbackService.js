@@ -22,6 +22,9 @@ const {
   computeTypingVarianceAdjustment,
 } = require('./trustScoringService');
 
+const MAX_FEEDBACK_IMAGES = 3;
+const MAX_FEEDBACK_IMAGE_BYTES = 5 * 1024 * 1024;
+
 function httpError(statusCode, message, code) {
   const err = new Error(message);
   err.statusCode = statusCode;
@@ -108,6 +111,43 @@ function normalizeServiceHighlights(rawHighlights = {}) {
     quality: coerceBoolean(source.quality, false),
     delivery: coerceBoolean(source.delivery, false),
   };
+}
+
+function estimateDataUrlBytes(value) {
+  const text = String(value || '').trim();
+  const commaIndex = text.indexOf(',');
+  if (commaIndex < 0) return 0;
+  const base64Payload = text.slice(commaIndex + 1).replace(/\s+/g, '');
+  const padding = base64Payload.endsWith('==') ? 2 : base64Payload.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((base64Payload.length * 3) / 4) - padding);
+}
+
+function normalizeFeedbackImages(rawImages) {
+  if (!Array.isArray(rawImages)) return [];
+
+  const cleaned = rawImages
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  if (cleaned.length > MAX_FEEDBACK_IMAGES) {
+    throw httpError(400, `Maximum ${MAX_FEEDBACK_IMAGES} images are allowed`, 'VALIDATION');
+  }
+
+  return cleaned.map((entry) => {
+    if (/^https?:\/\//i.test(entry)) return entry.slice(0, 2000);
+
+    const isDataUrl = /^data:image\/(jpeg|jpg|png);base64,[A-Za-z0-9+/=\s]+$/i.test(entry);
+    if (!isDataUrl) {
+      throw httpError(400, 'Only JPG and PNG images are supported', 'VALIDATION');
+    }
+
+    const bytes = estimateDataUrlBytes(entry);
+    if (bytes > MAX_FEEDBACK_IMAGE_BYTES) {
+      throw httpError(400, 'Each image must be 5MB or smaller', 'VALIDATION');
+    }
+
+    return entry;
+  });
 }
 
 function normalizeLocationText(value, maxLength = 120) {
@@ -225,6 +265,7 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
   const displayCountry = normalizeOptionalText(payload?.displayCountry, 80);
   const productName = normalizeOptionalText(payload?.productName, 140);
   const serviceHighlights = normalizeServiceHighlights(payload?.serviceHighlights);
+  const images = normalizeFeedbackImages(payload?.images);
   // --- Fixed-weight trust model (0–100) ---
   // Core signals use fixed weights. IP is applied as a soft adjustment around a neutral baseline.
 
@@ -422,6 +463,7 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
   if (codeValid) tags.push('Verified');
   if (order?.paymentStatus === 'PAID') tags.push('Payment Verified');
   if (trustBreakdown.aiBehavior.score >= 15) tags.push('AI Verified');
+  if (images.length) tags.push('Image Provided');
 
   const txRef = generateTxRef();
   tags.push('Blockchain Anchored');
@@ -434,6 +476,7 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
     rating: persistedRating,
     productName: productName || null,
     serviceHighlights,
+    imageCount: images.length,
     finalTrustScore,
     trustLevel,
     trustBreakdown,
@@ -484,6 +527,7 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
     displayCountry,
     productName,
     serviceHighlights,
+    images,
     rating: persistedRating,
     trustScore: finalTrustScore,
     baseTrustScore,
@@ -537,6 +581,7 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
     displayCountry,
     productName,
     serviceHighlights,
+    images,
     rating: persistedRating,
     trustScore: finalTrustScore,
     baseTrustScore,
@@ -559,6 +604,7 @@ async function submitFeedback({ vendorId, payload, requestMeta = {} }) {
     ipState: mergedLocation.state,
     ipCity: mergedLocation.city,
     ipRiskLevel: ipPattern.riskLevel,
+    imageCount: images.length,
     dupAdj,
     dupReason,
     typingAdj,

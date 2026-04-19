@@ -8,6 +8,7 @@ import {
   CustomerInsights,
   DashboardCards,
   InsightsPanel,
+  LeadsSection,
   OrdersTable,
   Sidebar,
   buildAlerts,
@@ -42,6 +43,7 @@ const DASHBOARD_VIEWS = new Set([
   'payments',
   'feedback',
   'messages',
+  'leads',
   'analytics',
   'customers',
   'profile',
@@ -1125,6 +1127,10 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
           onRefresh={() => refreshSupportMessages({ keepDataOnFailure: true })}
         />
       )
+    }
+
+    if (activeView === 'leads') {
+      return <LeadsSection />
     }
 
     if (activeView === 'analytics') {

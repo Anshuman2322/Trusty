@@ -4,6 +4,7 @@ export { ChartsSection } from './ChartsSection'
 export { CustomerInsights } from './CustomerInsights'
 export { DashboardCards } from './DashboardCards'
 export { InsightsPanel } from './InsightsPanel'
+export { LeadsSection } from './LeadsSection'
 export { OrdersTable } from './OrdersTable'
 export { Sidebar } from './Sidebar'
 export {

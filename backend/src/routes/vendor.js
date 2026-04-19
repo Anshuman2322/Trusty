@@ -27,10 +27,32 @@ const VENDOR_ALLOWED_CATEGORIES = new Set([
   'Food & Restaurant',
   'Retail',
   'Food',
+  'Pharmaceutical Exporter',
+  'General Store',
+  'Pharmacy',
+  'Healthcare',
+  'AI Engineer',
+  'Developer',
+  'DevOps Engineer',
+  'Freelancer',
   'Other',
 ]);
 
-const VENDOR_PROFILE_CATEGORIES = new Set(['Electronics', 'Services', 'Retail', 'Food', 'Other']);
+const VENDOR_PROFILE_CATEGORIES = new Set([
+  'Electronics',
+  'Services',
+  'Retail',
+  'Food',
+  'Pharmaceutical Exporter',
+  'General Store',
+  'Pharmacy',
+  'Healthcare',
+  'AI Engineer',
+  'Developer',
+  'DevOps Engineer',
+  'Freelancer',
+  'Other',
+]);
 
 const VENDOR_FRAUD_SENSITIVITY_LEVELS = new Set(['Low', 'Medium', 'High']);
 const VENDOR_DASHBOARD_DEFAULT_VIEWS = new Set(['Dashboard', 'Orders', 'Analytics']);

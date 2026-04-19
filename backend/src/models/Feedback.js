@@ -76,6 +76,14 @@ const FeedbackSchema = new mongoose.Schema(
     codeValid: { type: Boolean, default: false },
 
     text: { type: String, required: true, trim: true, maxlength: 2000 },
+    images: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (value) => Array.isArray(value) && value.length <= 3,
+        message: 'A maximum of 3 images can be attached to feedback.',
+      },
+    },
 
     // Privacy-safe: hash of normalized text (used only for duplicate detection).
     // Not used to identify a user.

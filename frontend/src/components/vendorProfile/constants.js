@@ -1,4 +1,18 @@
-export const BUSINESS_CATEGORIES = ['Electronics', 'Services', 'Retail', 'Food', 'Other']
+export const BUSINESS_CATEGORIES = [
+  'Electronics',
+  'Services',
+  'Retail',
+  'Food',
+  'Pharmaceutical Exporter',
+  'General Store',
+  'Pharmacy',
+  'Healthcare',
+  'AI Engineer',
+  'Developer',
+  'DevOps Engineer',
+  'Freelancer',
+  'Other',
+]
 
 export const COUNTRY_OPTIONS = [
   'India',

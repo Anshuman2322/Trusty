@@ -219,7 +219,21 @@ authRouter.post('/vendor-signup', async (req, res, next) => {
     );
     if (existingVendor) throw httpError(409, 'Business email already in use', 'CONFLICT');
 
-    const allowedCategories = new Set(['Electronics', 'Services', 'Retail', 'Food', 'Other']);
+    const allowedCategories = new Set([
+      'Electronics',
+      'Services',
+      'Retail',
+      'Food',
+      'Pharmaceutical Exporter',
+      'General Store',
+      'Pharmacy',
+      'Healthcare',
+      'AI Engineer',
+      'Developer',
+      'DevOps Engineer',
+      'Freelancer',
+      'Other',
+    ]);
     const category = allowedCategories.has(categoryRaw) ? categoryRaw : 'Other';
 
     const passwordHash = await hashPassword(password);

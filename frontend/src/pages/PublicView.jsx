@@ -8,6 +8,70 @@ import { getDeviceFingerprintHash, getOrCreateSessionId } from '../lib/device'
 const MAX_FEEDBACK_CHARS = 500
 const MIN_FEEDBACK_CHARS = 20
 const GEOLOCATION_TIMEOUT_MS = 4500
+const FIRST_TIME_GEOLOCATION_TIMEOUT_MS = 20000
+const MAX_UPLOAD_IMAGES = 3
+const MAX_UPLOAD_FILE_BYTES = 5 * 1024 * 1024
+const MAX_STORED_IMAGE_BYTES = 1.3 * 1024 * 1024
+const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
+
+function estimateDataUrlBytes(value) {
+  const text = String(value || '').trim()
+  const commaIndex = text.indexOf(',')
+  if (commaIndex < 0) return 0
+  const base64Payload = text.slice(commaIndex + 1).replace(/\s+/g, '')
+  const padding = base64Payload.endsWith('==') ? 2 : base64Payload.endsWith('=') ? 1 : 0
+  return Math.max(0, Math.floor((base64Payload.length * 3) / 4) - padding)
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(new Error('Unable to read image file.'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function loadImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Unable to process image.'))
+    img.src = dataUrl
+  })
+}
+
+async function compressImageFile(file) {
+  const originalDataUrl = await readFileAsDataUrl(file)
+  const image = await loadImageElement(originalDataUrl)
+
+  const maxDimension = 1400
+  const scale = Math.min(1, maxDimension / Math.max(image.width, image.height))
+  const width = Math.max(1, Math.round(image.width * scale))
+  const height = Math.max(1, Math.round(image.height * scale))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return originalDataUrl
+
+  ctx.drawImage(image, 0, 0, width, height)
+
+  const preferredType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
+  let quality = preferredType === 'image/jpeg' ? 0.9 : undefined
+  let output =
+    preferredType === 'image/jpeg'
+      ? canvas.toDataURL(preferredType, quality)
+      : canvas.toDataURL(preferredType)
+
+  while (estimateDataUrlBytes(output) > MAX_STORED_IMAGE_BYTES && preferredType === 'image/jpeg' && quality > 0.45) {
+    quality = Math.max(0.45, Number((quality - 0.1).toFixed(2)))
+    output = canvas.toDataURL(preferredType, quality)
+  }
+
+  return output
+}
 
 function formatTrustLevel(level) {
   if (!level) return '—'
@@ -459,9 +523,9 @@ function parseReverseGeocodeAddress(address) {
   }
 }
 
-async function fetchClientLocationSnapshot() {
+async function fetchClientLocationSnapshot(timeoutMs = GEOLOCATION_TIMEOUT_MS) {
   try {
-    const position = await getCurrentPositionWithTimeout(GEOLOCATION_TIMEOUT_MS)
+    const position = await getCurrentPositionWithTimeout(timeoutMs)
     const latitude = Number(position?.coords?.latitude)
     const longitude = Number(position?.coords?.longitude)
 
@@ -573,7 +637,11 @@ export function PublicView({ vendors, defaultVendorId }) {
   })
 
   const [text, setText] = useState('')
-  const [notReceived, setNotReceived] = useState(false)
+  const [uploadedImages, setUploadedImages] = useState([])
+  const [imageUploadError, setImageUploadError] = useState('')
+  const [isDragOverUpload, setIsDragOverUpload] = useState(false)
+  const [lightbox, setLightbox] = useState({ open: false, images: [], index: 0 })
+  const fileInputRef = useRef(null)
   const typingStartRef = useRef(null)
   const editCountRef = useRef(0)
   const firstInputRef = useRef(null)
@@ -581,6 +649,8 @@ export function PublicView({ vendors, defaultVendorId }) {
   const maxDeltaCharsRef = useRef(0)
   const lastInputTsRef = useRef(null)
   const intervalsRef = useRef([])
+  const locationSnapshotRef = useRef(null)
+  const locationPromiseRef = useRef(null)
 
   const [submitState, setSubmitState] = useState({ submitting: false, result: null, warning: '' })
 
@@ -648,6 +718,7 @@ export function PublicView({ vendors, defaultVendorId }) {
   const trimmedLength = text.trim().length
   const meetsTextMinimum = trimmedLength >= MIN_FEEDBACK_CHARS
   const hasSelectedRating = rating > 0
+  const hasImageUploadInProgress = uploadedImages.some((item) => item.status === 'loading')
   const publicDetailRows = [
     { key: 'businessCategory', label: 'Business Category', value: profile?.businessCategory },
     { key: 'businessEmail', label: 'Business Email', value: profile?.businessEmail },
@@ -661,6 +732,11 @@ export function PublicView({ vendors, defaultVendorId }) {
   useEffect(() => {
     if (!vendorId && defaultVendorId) setVendorId(defaultVendorId)
   }, [defaultVendorId, vendorId])
+
+  useEffect(() => {
+    locationSnapshotRef.current = null
+    locationPromiseRef.current = null
+  }, [vendorId])
 
   useEffect(() => {
     if (!vendorOptions.length) return
@@ -720,6 +796,153 @@ export function PublicView({ vendors, defaultVendorId }) {
   }, [vendorId])
 
   useEffect(() => {
+    if (!lightbox.open) return undefined
+
+    function onKeyDown(event) {
+      if (event.key === 'Escape') {
+        setLightbox({ open: false, images: [], index: 0 })
+        return
+      }
+      if (event.key === 'ArrowRight') {
+        setLightbox((prev) => {
+          if (!prev.images.length) return prev
+          return { ...prev, index: (prev.index + 1) % prev.images.length }
+        })
+      }
+      if (event.key === 'ArrowLeft') {
+        setLightbox((prev) => {
+          if (!prev.images.length) return prev
+          return { ...prev, index: (prev.index - 1 + prev.images.length) % prev.images.length }
+        })
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [lightbox.open])
+
+  function removeUploadedImage(id) {
+    setUploadedImages((prev) => prev.filter((item) => item.id !== id))
+  }
+
+  function openLightbox(images, startIndex = 0) {
+    const normalized = (Array.isArray(images) ? images : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+      .slice(0, MAX_UPLOAD_IMAGES)
+
+    if (!normalized.length) return
+
+    setLightbox({
+      open: true,
+      images: normalized,
+      index: Math.max(0, Math.min(startIndex, normalized.length - 1)),
+    })
+  }
+
+  function closeLightbox() {
+    setLightbox({ open: false, images: [], index: 0 })
+  }
+
+  function shiftLightbox(offset) {
+    setLightbox((prev) => {
+      if (!prev.images.length) return prev
+      const nextIndex = (prev.index + offset + prev.images.length) % prev.images.length
+      return { ...prev, index: nextIndex }
+    })
+  }
+
+  async function handleIncomingImageFiles(fileList) {
+    const files = Array.from(fileList || [])
+    if (!files.length) return
+
+    setImageUploadError('')
+
+    const availableSlots = Math.max(0, MAX_UPLOAD_IMAGES - uploadedImages.length)
+    if (availableSlots <= 0) {
+      setImageUploadError(`You can upload up to ${MAX_UPLOAD_IMAGES} images.`)
+      return
+    }
+
+    const selected = files.slice(0, availableSlots)
+    const ignoredCount = Math.max(0, files.length - selected.length)
+    const errors = []
+
+    const validFiles = []
+    selected.forEach((file) => {
+      const fileType = String(file?.type || '').toLowerCase()
+      if (!ACCEPTED_IMAGE_TYPES.has(fileType)) {
+        errors.push(`${file.name}: only JPG and PNG are supported.`)
+        return
+      }
+      if (Number(file.size || 0) > MAX_UPLOAD_FILE_BYTES) {
+        errors.push(`${file.name}: file exceeds 5MB.`)
+        return
+      }
+      validFiles.push(file)
+    })
+
+    if (ignoredCount > 0) {
+      errors.push(`Only the first ${MAX_UPLOAD_IMAGES} images are allowed.`)
+    }
+
+    const loadingEntries = validFiles.map((file) => ({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      name: file.name,
+      status: 'loading',
+      url: '',
+    }))
+
+    if (loadingEntries.length) {
+      setUploadedImages((prev) => [...prev, ...loadingEntries])
+    }
+
+    for (let i = 0; i < validFiles.length; i += 1) {
+      const file = validFiles[i]
+      const entryId = loadingEntries[i]?.id
+      if (!entryId) continue
+
+      try {
+        const dataUrl = await compressImageFile(file)
+        if (estimateDataUrlBytes(dataUrl) > MAX_STORED_IMAGE_BYTES * 1.4) {
+          throw new Error('Image is still too large after optimization. Try a smaller image.')
+        }
+
+        setUploadedImages((prev) =>
+          prev.map((item) =>
+            item.id === entryId
+              ? {
+                  ...item,
+                  status: 'ready',
+                  url: dataUrl,
+                }
+              : item
+          )
+        )
+      } catch (err) {
+        setUploadedImages((prev) => prev.filter((item) => item.id !== entryId))
+        errors.push(`${file.name}: ${err?.message || 'upload failed.'}`)
+      }
+    }
+
+    if (errors.length) {
+      setImageUploadError(errors.slice(0, 3).join(' '))
+    }
+  }
+
+  function onImageInputChange(event) {
+    const { files } = event.target
+    handleIncomingImageFiles(files)
+    event.target.value = ''
+  }
+
+  function onImageDrop(event) {
+    event.preventDefault()
+    setIsDragOverUpload(false)
+    handleIncomingImageFiles(event.dataTransfer?.files)
+  }
+
+  useEffect(() => {
     let cancelled = false
     async function check() {
       if (mode !== 'verified' || !vendorId) {
@@ -747,6 +970,37 @@ export function PublicView({ vendors, defaultVendorId }) {
     }
   }, [code, mode, vendorId])
 
+  function warmupClientLocationCapture() {
+    if (locationSnapshotRef.current || locationPromiseRef.current) return
+
+    locationPromiseRef.current = fetchClientLocationSnapshot(FIRST_TIME_GEOLOCATION_TIMEOUT_MS)
+      .then((snapshot) => {
+        if (snapshot) locationSnapshotRef.current = snapshot
+        return snapshot
+      })
+      .catch(() => null)
+      .finally(() => {
+        locationPromiseRef.current = null
+      })
+  }
+
+  async function resolveClientLocationForSubmit() {
+    if (locationSnapshotRef.current) return locationSnapshotRef.current
+
+    if (!locationPromiseRef.current) {
+      warmupClientLocationCapture()
+    }
+
+    if (locationPromiseRef.current) {
+      const warmedSnapshot = await locationPromiseRef.current
+      if (warmedSnapshot) return warmedSnapshot
+    }
+
+    const freshSnapshot = await fetchClientLocationSnapshot(FIRST_TIME_GEOLOCATION_TIMEOUT_MS)
+    if (freshSnapshot) locationSnapshotRef.current = freshSnapshot
+    return freshSnapshot
+  }
+
   async function onSubmit(e) {
     e.preventDefault()
     if (!vendorId) return
@@ -771,6 +1025,11 @@ export function PublicView({ vendors, defaultVendorId }) {
       return
     }
 
+    if (hasImageUploadInProgress) {
+      setSubmitState({ submitting: false, result: null, warning: 'Please wait for image upload to finish.' })
+      return
+    }
+
     try {
       setSubmitState({ submitting: true, result: null, warning: '' })
 
@@ -792,12 +1051,13 @@ export function PublicView({ vendors, defaultVendorId }) {
         typingIntervalVarianceMs2 = varianceSum / typingIntervalsCount
       }
 
-      const clientLocation = await fetchClientLocationSnapshot()
+      const clientLocation = await resolveClientLocationForSubmit()
 
       const body = {
         text: trimmed,
         rating,
         serviceHighlights,
+        images: uploadedImages.filter((item) => item.status === 'ready' && item.url).map((item) => item.url),
         code: mode === 'verified' ? code.trim() : '',
         deviceHash,
         sessionId,
@@ -810,7 +1070,6 @@ export function PublicView({ vendors, defaultVendorId }) {
           typingIntervalMeanMs,
           typingIntervalVarianceMs2,
         },
-        notReceived,
         clientLocation,
       }
 
@@ -830,7 +1089,8 @@ export function PublicView({ vendors, defaultVendorId }) {
       lastInputTsRef.current = null
       intervalsRef.current = []
       setText('')
-      setNotReceived(false)
+      setUploadedImages([])
+      setImageUploadError('')
       setRating(0)
       setServiceHighlights({ response: false, quality: false, delivery: false })
       await refresh()
@@ -840,6 +1100,8 @@ export function PublicView({ vendors, defaultVendorId }) {
   }
 
   function onTextChange(next) {
+    warmupClientLocationCapture()
+
     if (!typingStartRef.current) typingStartRef.current = Date.now()
     if (!firstInputRef.current) firstInputRef.current = Date.now()
     editCountRef.current += 1
@@ -860,10 +1122,6 @@ export function PublicView({ vendors, defaultVendorId }) {
     lastLengthRef.current = (next || '').length
 
     setText(next)
-  }
-
-  function handleNotReceivedToggle(nextChecked) {
-    setNotReceived(nextChecked)
   }
 
   function toggleServiceHighlight(key) {
@@ -1155,15 +1413,88 @@ export function PublicView({ vendors, defaultVendorId }) {
                   </div>
                 </div>
 
-                <div className="field publicFeedbackCheckboxRow">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={notReceived}
-                      onChange={(e) => handleNotReceivedToggle(e.target.checked)}
-                    />{' '}
-                    Mark as “Not Received”
-                  </label>
+                <div className="field publicFeedbackImageField">
+                  <label>Upload product image (optional)</label>
+                  <div className="publicFeedbackCodeHint">Add images to support your feedback (optional)</div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    multiple
+                    className="publicFeedbackFileInput"
+                    onChange={onImageInputChange}
+                  />
+
+                  <div
+                    className={`publicFeedbackImageDrop ${isDragOverUpload ? 'is-dragover' : ''}`}
+                    onDragEnter={(e) => {
+                      e.preventDefault()
+                      setIsDragOverUpload(true)
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setIsDragOverUpload(true)
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault()
+                      setIsDragOverUpload(false)
+                    }}
+                    onDrop={onImageDrop}
+                  >
+                    <div className="publicFeedbackImageDropActions">
+                      <button
+                        type="button"
+                        className="btn secondary publicFeedbackImagePickBtn"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        Choose Images
+                      </button>
+                      <span>or drag and drop JPG/PNG (max 5MB each)</span>
+                    </div>
+                  </div>
+
+                  {imageUploadError ? <div className="publicFeedbackImageError">{imageUploadError}</div> : null}
+
+                  {uploadedImages.length ? (
+                    <div className="publicFeedbackImagePreviewGrid">
+                      {uploadedImages.map((item, index) => {
+                        const readyImages = uploadedImages
+                          .filter((entry) => entry.status === 'ready' && entry.url)
+                          .map((entry) => entry.url)
+                        const readyIndex = readyImages.indexOf(item.url)
+
+                        return (
+                          <div key={item.id} className="publicFeedbackImagePreviewItem">
+                            {item.status === 'loading' ? (
+                              <div className="publicFeedbackImageLoading" aria-label="Uploading image">
+                                <span className="publicFeedbackImageSpinner" aria-hidden="true" />
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="publicFeedbackImagePreviewBtn"
+                                onClick={() => {
+                                  if (readyIndex >= 0) openLightbox(readyImages, readyIndex)
+                                }}
+                              >
+                                <img src={item.url} alt={`Upload preview ${index + 1}`} loading="lazy" />
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              className="publicFeedbackImageRemoveBtn"
+                              onClick={() => removeUploadedImage(item.id)}
+                              aria-label={`Remove ${item.name || 'image'}`}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : null}
                 </div>
 
                 {submitState.warning ? <div className="alert error">{submitState.warning}</div> : null}
@@ -1273,6 +1604,9 @@ export function PublicView({ vendors, defaultVendorId }) {
                 const canExplainScore =
                   canShowScore &&
                   Boolean(f?.explanation || f?.trustBreakdown || f?.trustBreakdownList || f?.breakdown)
+                const reviewImages = Array.isArray(f?.images)
+                  ? f.images.map((value) => String(value || '').trim()).filter(Boolean).slice(0, MAX_UPLOAD_IMAGES)
+                  : []
 
                 return (
                   <div key={f._id} className="card publicReviewCard">
@@ -1328,6 +1662,7 @@ export function PublicView({ vendors, defaultVendorId }) {
 
                         <div className="publicReviewProductLine">
                           {reviewProductName ? <span>Product Name : {reviewProductName}</span> : null}
+                          {reviewImages.length ? <span className="publicReviewProofBadge">Image Provided</span> : null}
                         </div>
 
                         {reviewServiceHighlights.length ? (
@@ -1342,6 +1677,20 @@ export function PublicView({ vendors, defaultVendorId }) {
                         ) : null}
 
                         <div className="publicReviewText">{f.text}</div>
+                        {reviewImages.length ? (
+                          <div className="publicReviewImageGrid">
+                            {reviewImages.map((imageUrl, imageIndex) => (
+                              <button
+                                key={`${f._id || 'review'}-image-${imageIndex}`}
+                                type="button"
+                                className="publicReviewImageThumb"
+                                onClick={() => openLightbox(reviewImages, imageIndex)}
+                              >
+                                <img src={imageUrl} alt={`Review proof ${imageIndex + 1}`} loading="lazy" />
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                         {visibleTags.length ? (
                           <div className="pillRow reviewTags">
                             {visibleTags.map((t, idx) => {
@@ -1372,6 +1721,43 @@ export function PublicView({ vendors, defaultVendorId }) {
           </section>
         </div>
       </section>
+
+      {lightbox.open ? (
+        <div className="publicImageLightbox" role="dialog" aria-modal="true" onClick={closeLightbox}>
+          <div className="publicImageLightboxPanel" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="publicImageLightboxClose"
+              onClick={closeLightbox}
+              aria-label="Close image preview"
+            >
+              ×
+            </button>
+
+            <img
+              src={lightbox.images[lightbox.index]}
+              alt={`Proof image ${lightbox.index + 1}`}
+              className="publicImageLightboxImage"
+            />
+
+            <div className="publicImageLightboxFooter">
+              <span>
+                {lightbox.index + 1} / {lightbox.images.length}
+              </span>
+              {lightbox.images.length > 1 ? (
+                <div className="publicImageLightboxNav">
+                  <button type="button" onClick={() => shiftLightbox(-1)} aria-label="Previous image">
+                    Prev
+                  </button>
+                  <button type="button" onClick={() => shiftLightbox(1)} aria-label="Next image">
+                    Next
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

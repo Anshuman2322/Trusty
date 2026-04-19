@@ -63,6 +63,13 @@ function resolveFeedbackPublicRules(vendor) {
 function sanitizeFeedbackForPublic(feedback, rules) {
   const item = { ...feedback };
 
+  item.images = Array.isArray(item.images)
+    ? item.images
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .slice(0, 3)
+    : [];
+
   if (!rules.showTrustScorePublicly) {
     delete item.trustScore;
     delete item.baseTrustScore;

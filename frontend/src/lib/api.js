@@ -22,7 +22,6 @@ function getApiBaseCandidates() {
 async function request(path, options = {}) {
   const token = getToken()
   let res
-  let networkError = null
   const baseCandidates = getApiBaseCandidates()
   const localApiBase = 'http://localhost:5000'
 
@@ -48,10 +47,9 @@ async function request(path, options = {}) {
         continue
       }
 
-      networkError = null
       break
-    } catch (err) {
-      networkError = err
+    } catch {
+      // Try next API base candidate.
     }
   }
 
@@ -77,6 +75,14 @@ export async function apiGet(path) {
 
 export async function apiPost(path, body) {
   return request(path, { method: 'POST', body: JSON.stringify(body || {}) })
+}
+
+export async function apiPut(path, body) {
+  return request(path, { method: 'PUT', body: JSON.stringify(body || {}) })
+}
+
+export async function apiDelete(path) {
+  return request(path, { method: 'DELETE' })
 }
 
 export async function apiGetBlob(path) {
