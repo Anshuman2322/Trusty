@@ -10,6 +10,7 @@ import {
   InsightsPanel,
   LeadsSection,
   OrdersTable,
+  PipelineBoard,
   Sidebar,
   buildAlerts,
   buildCustomerInsights,
@@ -39,6 +40,7 @@ const DELIVERY_OPTIONS = [
 
 const DASHBOARD_VIEWS = new Set([
   'dashboard',
+  'pipeline',
   'orders',
   'payments',
   'feedback',
@@ -541,6 +543,7 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
 
   const [overview, setOverview] = useState(null)
   const [orders, setOrders] = useState([])
+  const [leads, setLeads] = useState([])
   const [feedbacks, setFeedbacks] = useState([])
   const [vendorProfile, setVendorProfile] = useState(null)
   const [vendorSettings, setVendorSettings] = useState(null)
@@ -638,6 +641,18 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     }
   }, [])
 
+  const refreshLeads = useCallback(async (options = {}) => {
+    try {
+      const leadsData = await apiGet('/api/leads?includeDeleted=1')
+      setLeads(leadsData?.leads || [])
+    } catch (leadsErr) {
+      setLeads([])
+      if (!options.silent) {
+        setError(leadsErr?.message || 'Failed to load CRM leads')
+      }
+    }
+  }, [])
+
   async function refresh(options = {}) {
     const allowAuthRetry = options.allowAuthRetry !== false
     if (!vendorId) return
@@ -680,6 +695,8 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
       setFeedbacks(dashboardData?.feedbacks || [])
       setVendorProfile(dashboardData?.profile || null)
       setVendorSettings(dashboardData?.settings || null)
+
+      await refreshLeads({ silent: options.silentLeadsError })
 
       await refreshSupportMessages({ silent: true, keepDataOnFailure: true })
     } catch (e) {
@@ -734,6 +751,7 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     setSessionState(null)
     setOverview(null)
     setOrders([])
+    setLeads([])
     setFeedbacks([])
     setVendorProfile(null)
     setVendorSettings(null)
@@ -1073,6 +1091,18 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
       )
     }
 
+    if (activeView === 'pipeline') {
+      return (
+        <PipelineBoard
+          vendorId={vendorId}
+          leads={leads}
+          orders={orders}
+          onRefresh={refresh}
+          onError={setError}
+        />
+      )
+    }
+
     if (activeView === 'orders') {
       return (
         <OrdersTable
@@ -1130,7 +1160,7 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     }
 
     if (activeView === 'leads') {
-      return <LeadsSection />
+      return <LeadsSection onLeadsChanged={() => refreshLeads({ silent: true })} />
     }
 
     if (activeView === 'analytics') {
@@ -1177,8 +1207,16 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     return null
   }
 
+  const shellClassName = [
+    'vdShell',
+    sidebarMobileOpen ? 'vdShell--sidebar-open' : '',
+    activeView === 'pipeline' ? 'vdShell--pipeline' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className={sidebarMobileOpen ? 'vdShell vdShell--sidebar-open' : 'vdShell'}>
+    <div className={shellClassName}>
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((prev) => !prev)}
@@ -1271,7 +1309,9 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
         {error ? <div className="alert error">{error}</div> : null}
 
   {loading && !overview ? renderBootLoader() : null}
-        {!loading || overview ? <div className="vdContent">{renderActiveView()}</div> : null}
+        {!loading || overview ? (
+          <div className={activeView === 'pipeline' ? 'vdContent vdContent--pipeline' : 'vdContent'}>{renderActiveView()}</div>
+        ) : null}
 
         {createResult ? (
           <section className="vdSection">

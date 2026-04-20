@@ -11,6 +11,31 @@ const leadsRouter = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^\+?[0-9()\-\s.]{7,20}$/;
 const LEAD_STATUS = new Set(['new', 'contacted', 'converted']);
+const PRIORITY_VALUES = new Set(['low', 'medium', 'high']);
+const PAYMENT_VALUES = new Set(['not_started', 'pending', 'paid']);
+const DELIVERY_VALUES = new Set([
+  'not_started',
+  'processing',
+  'dispatched',
+  'in_transit',
+  'in_customs',
+  'out_of_customs',
+  'out_for_delivery',
+  'delivered',
+]);
+const SENTIMENT_VALUES = new Set(['positive', 'neutral', 'negative', '']);
+const CRM_STAGE_VALUES = new Set([
+  'new_lead',
+  'contacted',
+  'negotiation_follow_up',
+  'invoice_sent',
+  'payment_pending',
+  'payment_received',
+  'order_processing',
+  'shipped',
+  'delivered',
+  'feedback_retention',
+]);
 
 function normalizeText(value, maxLen = 200) {
   return String(value || '').trim().slice(0, maxLen);
@@ -20,6 +45,74 @@ function normalizeStatus(value, fallback = 'new') {
   const status = String(value || '').trim().toLowerCase();
   if (LEAD_STATUS.has(status)) return status;
   return fallback;
+}
+
+function normalizePriority(value, fallback = 'medium') {
+  const priority = String(value || '').trim().toLowerCase();
+  if (PRIORITY_VALUES.has(priority)) return priority;
+  return fallback;
+}
+
+function normalizePaymentStatus(value, fallback = 'not_started') {
+  const status = String(value || '').trim().toLowerCase();
+  if (PAYMENT_VALUES.has(status)) return status;
+  return fallback;
+}
+
+function normalizeDeliveryStatus(value, fallback = 'not_started') {
+  const status = String(value || '').trim().toLowerCase();
+  if (DELIVERY_VALUES.has(status)) return status;
+  return fallback;
+}
+
+function normalizeSentiment(value, fallback = '') {
+  const sentiment = String(value || '').trim().toLowerCase();
+  if (SENTIMENT_VALUES.has(sentiment)) return sentiment;
+  return fallback;
+}
+
+function normalizeCrmStage(value, fallback = 'new_lead') {
+  const stage = String(value || '').trim().toLowerCase();
+  if (CRM_STAGE_VALUES.has(stage)) return stage;
+  return fallback;
+}
+
+function normalizePercentage(value, fallback = null) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const num = Number(value);
+  if (!Number.isFinite(num)) throw httpError(400, 'Invalid percentage value', 'VALIDATION');
+  return Math.max(0, Math.min(100, num));
+}
+
+function normalizeOptionalDate(value) {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  return normalizeDate(value);
+}
+
+function normalizeObjectId(value) {
+  if (value === undefined) return undefined;
+  if (!value) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  if (!mongoose.Types.ObjectId.isValid(str)) {
+    throw httpError(400, 'Invalid linked order id', 'VALIDATION');
+  }
+  return str;
+}
+
+function ensureActivityLog(lead) {
+  if (!Array.isArray(lead.activityLog)) lead.activityLog = [];
+}
+
+function appendActivity(lead, activity) {
+  ensureActivityLog(lead);
+  lead.activityLog.push({
+    type: String(activity?.type || 'update').slice(0, 80),
+    message: String(activity?.message || 'Updated record').slice(0, 240),
+    createdAt: new Date(),
+    meta: activity?.meta || {},
+  });
 }
 
 function normalizeDate(value) {
@@ -54,6 +147,10 @@ function buildLeadPayload(body = {}, options = {}) {
     payload.phone = phone;
   }
 
+  if (requireAll || body.address !== undefined) {
+    payload.address = normalizeText(body.address, 240);
+  }
+
   if (requireAll || body.country !== undefined) {
     payload.country = normalizeText(body.country, 80);
   }
@@ -70,6 +167,50 @@ function buildLeadPayload(body = {}, options = {}) {
     payload.status = normalizeStatus(body.status, 'new');
   }
 
+  if (requireAll || body.crmStage !== undefined) {
+    payload.crmStage = normalizeCrmStage(body.crmStage, 'new_lead');
+  }
+
+  if (requireAll || body.priority !== undefined) {
+    payload.priority = normalizePriority(body.priority, 'medium');
+  }
+
+  const followUpAt = normalizeOptionalDate(body.followUpAt);
+  if (requireAll || followUpAt !== undefined) {
+    payload.followUpAt = followUpAt === undefined ? null : followUpAt;
+  }
+
+  if (requireAll || body.paymentStatus !== undefined) {
+    payload.paymentStatus = normalizePaymentStatus(body.paymentStatus, 'not_started');
+  }
+
+  if (requireAll || body.deliveryStatus !== undefined) {
+    payload.deliveryStatus = normalizeDeliveryStatus(body.deliveryStatus, 'not_started');
+  }
+
+  if (requireAll || body.trackingRef !== undefined) {
+    payload.trackingRef = normalizeText(body.trackingRef, 120);
+  }
+
+  const trustScore = normalizePercentage(body.trustScore, null);
+  if (requireAll || body.trustScore !== undefined) {
+    payload.trustScore = trustScore;
+  }
+
+  if (requireAll || body.sentiment !== undefined) {
+    payload.sentiment = normalizeSentiment(body.sentiment, '');
+  }
+
+  const nextPurchaseProbability = normalizePercentage(body.nextPurchaseProbability, null);
+  if (requireAll || body.nextPurchaseProbability !== undefined) {
+    payload.nextPurchaseProbability = nextPurchaseProbability;
+  }
+
+  const linkedOrderId = normalizeObjectId(body.linkedOrderId);
+  if (requireAll || linkedOrderId !== undefined) {
+    payload.linkedOrderId = linkedOrderId;
+  }
+
   return payload;
 }
 
@@ -82,6 +223,9 @@ function parseLeadFilters(query = {}) {
   if (country) filter.country = country;
   if (product) filter.product = product;
   if (status) filter.status = status;
+  if (!String(query.includeDeleted || '').trim()) {
+    filter.deletedAt = null;
+  }
 
   return filter;
 }
@@ -100,6 +244,7 @@ leadsRouter.post('/', async (req, res, next) => {
     const lead = await Lead.create({
       vendorId,
       ...payload,
+      activityLog: [{ type: 'created', message: 'Lead created', createdAt: new Date(), meta: {} }],
     });
 
     res.status(201).json({ ok: true, lead });
@@ -141,9 +286,54 @@ leadsRouter.put('/:id', async (req, res, next) => {
       throw httpError(400, 'No valid lead fields to update', 'VALIDATION');
     }
 
-    const lead = await Lead.findOneAndUpdate({ _id: id, vendorId }, { $set: payload }, { new: true });
+    const lead = await Lead.findOne({ _id: id, vendorId, deletedAt: null });
     if (!lead) throw httpError(404, 'Lead not found', 'LEAD_NOT_FOUND');
 
+    for (const [field, nextValue] of Object.entries(payload)) {
+      const prevValue = lead[field];
+      const changed = String(prevValue ?? '') !== String(nextValue ?? '');
+      if (changed) {
+        appendActivity(lead, {
+          type: 'field_update',
+          message: `Updated ${field}`,
+          meta: { field, from: prevValue ?? null, to: nextValue ?? null },
+        });
+      }
+      lead[field] = nextValue;
+    }
+
+    await lead.save();
+
+    res.json({ ok: true, lead });
+  } catch (err) {
+    next(err);
+  }
+});
+
+leadsRouter.post('/:id/notes', async (req, res, next) => {
+  try {
+    const vendorId = req.user?.vendorId;
+    const id = String(req.params.id || '');
+
+    if (!vendorId || !mongoose.Types.ObjectId.isValid(String(vendorId))) {
+      throw httpError(403, 'Vendor access required', 'FORBIDDEN');
+    }
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw httpError(404, 'Lead not found', 'LEAD_NOT_FOUND');
+    }
+
+    const text = normalizeText(req.body?.text, 2000);
+    if (!text) throw httpError(400, 'Note text is required', 'VALIDATION');
+
+    const createdBy = normalizeText(req.body?.createdBy, 160) || 'vendor';
+    const lead = await Lead.findOne({ _id: id, vendorId, deletedAt: null });
+    if (!lead) throw httpError(404, 'Lead not found', 'LEAD_NOT_FOUND');
+
+    if (!Array.isArray(lead.notes)) lead.notes = [];
+    lead.notes.push({ text, createdBy, createdAt: new Date() });
+    appendActivity(lead, { type: 'note_added', message: 'Added note', meta: { noteLength: text.length } });
+
+    await lead.save();
     res.json({ ok: true, lead });
   } catch (err) {
     next(err);
@@ -162,10 +352,39 @@ leadsRouter.delete('/:id', async (req, res, next) => {
       throw httpError(404, 'Lead not found', 'LEAD_NOT_FOUND');
     }
 
-    const deleted = await Lead.findOneAndDelete({ _id: id, vendorId });
-    if (!deleted) throw httpError(404, 'Lead not found', 'LEAD_NOT_FOUND');
+    const lead = await Lead.findOne({ _id: id, vendorId, deletedAt: null });
+    if (!lead) throw httpError(404, 'Lead not found', 'LEAD_NOT_FOUND');
+
+    lead.deletedAt = new Date();
+    appendActivity(lead, { type: 'soft_deleted', message: 'Record moved to archive', meta: {} });
+    await lead.save();
 
     res.json({ ok: true, deletedId: id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+leadsRouter.post('/:id/unarchive', async (req, res, next) => {
+  try {
+    const vendorId = req.user?.vendorId;
+    const id = String(req.params.id || '');
+
+    if (!vendorId || !mongoose.Types.ObjectId.isValid(String(vendorId))) {
+      throw httpError(403, 'Vendor access required', 'FORBIDDEN');
+    }
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw httpError(404, 'Lead not found', 'LEAD_NOT_FOUND');
+    }
+
+    const lead = await Lead.findOne({ _id: id, vendorId, deletedAt: { $ne: null } });
+    if (!lead) throw httpError(404, 'Archived lead not found', 'LEAD_NOT_FOUND');
+
+    lead.deletedAt = null;
+    appendActivity(lead, { type: 'unarchived', message: 'Record restored from archive', meta: {} });
+    await lead.save();
+
+    res.json({ ok: true, lead });
   } catch (err) {
     next(err);
   }
@@ -182,7 +401,7 @@ leadsRouter.post('/:id/send-email', async (req, res, next) => {
       throw httpError(404, 'Lead not found', 'LEAD_NOT_FOUND');
     }
 
-    const lead = await Lead.findOne({ _id: id, vendorId });
+    const lead = await Lead.findOne({ _id: id, vendorId, deletedAt: null });
     if (!lead) throw httpError(404, 'Lead not found', 'LEAD_NOT_FOUND');
 
     const subject = normalizeText(req.body?.subject, 180);
@@ -202,8 +421,18 @@ leadsRouter.post('/:id/send-email', async (req, res, next) => {
     const nextStatus = lead.status === 'new' ? 'contacted' : lead.status;
     if (nextStatus !== lead.status) {
       lead.status = nextStatus;
-      await lead.save();
     }
+
+    if (lead.crmStage === 'new_lead') {
+      lead.crmStage = 'contacted';
+    }
+
+    appendActivity(lead, {
+      type: 'email_sent',
+      message: 'Email sent to lead',
+      meta: { subject },
+    });
+    await lead.save();
 
     res.json({ ok: true, delivery, lead });
   } catch (err) {

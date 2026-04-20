@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { apiDelete, apiGet, apiPost, apiPut } from '../../lib/api'
 
 const EMAIL_REGEX = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
-const PHONE_REGEX = /\+\d{1,3}[- ]?\d{6,14}/
+const PHONE_REGEX = /(?:\+?\d[\d()\-.\s]{6,}\d)/
 const DATE_REGEX = /\d{4}-\d{2}-\d{2}/
 
 const COUNTRY_OPTIONS = [
@@ -48,6 +48,27 @@ const PRODUCT_HINT_WORDS = new Set([
   'dosage',
   'pain',
 ])
+
+function isLikelyMedicineProduct(value) {
+  const text = normalizeWhitespace(value)
+  if (!text) return false
+
+  const lowered = text.toLowerCase()
+  if (detectCountry(text).country && lowered.split(' ').length <= 3) {
+    return false
+  }
+
+  if (/\b\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?\s?(mg|mcg|g|ml)\b/i.test(text)) {
+    return true
+  }
+
+  for (const hint of PRODUCT_HINT_WORDS) {
+    const pattern = new RegExp(`\\b${escapeRegExp(hint)}\\b`, 'i')
+    if (pattern.test(text)) return true
+  }
+
+  return false
+}
 
 const STATUS_OPTIONS = [
   { value: 'new', label: 'New' },
@@ -96,16 +117,101 @@ function looksLikeNameWord(token) {
   return /^[A-Za-z][A-Za-z'.-]*$/.test(token)
 }
 
+function digitCount(value) {
+  return String(value || '').replace(/\D/g, '').length
+}
+
+function normalizePhone(value) {
+  return normalizeWhitespace(String(value || '').replace(/\s+/g, ' '))
+}
+
+function pickBestPhone(raw) {
+  const candidates = String(raw || '').match(new RegExp(PHONE_REGEX, 'g')) || []
+  const valid = candidates
+    .map((item) => normalizePhone(item))
+    .filter((item) => {
+      const digits = digitCount(item)
+      return digits >= 7 && digits <= 15
+    })
+
+  if (!valid.length) return ''
+  valid.sort((a, b) => digitCount(b) - digitCount(a))
+  return valid[0]
+}
+
+function looksLikeAddress(value) {
+  const text = String(value || '')
+  if (!text.trim()) return false
+
+  const lowered = text.toLowerCase()
+  const addressHints = ['street', 'st', 'road', 'rd', 'avenue', 'ave', 'floor', 'apt', 'suite', 'blvd', 'lane', 'ln', 'city', 'ny']
+  const hasHint = addressHints.some((hint) => new RegExp(`\\b${escapeRegExp(hint)}\\b`, 'i').test(lowered))
+  const hasNumber = /\d/.test(text)
+  const hasCommaOrNewline = /,|\n/.test(text)
+
+  return hasNumber && (hasHint || hasCommaOrNewline)
+}
+
+function extractQuotedAddress(raw) {
+  const source = String(raw || '')
+  const quotedRegex = /"([\s\S]*?)"/g
+  let match = quotedRegex.exec(source)
+
+  while (match) {
+    const candidate = normalizeWhitespace(match[1])
+    if (looksLikeAddress(candidate)) {
+      return {
+        address: candidate,
+        remaining: source.slice(0, match.index) + source.slice(match.index + match[0].length),
+      }
+    }
+    match = quotedRegex.exec(source)
+  }
+
+  return { address: '', remaining: source }
+}
+
+function extractAddressFromLines(raw) {
+  const lines = String(raw || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  if (!lines.length) {
+    return { address: '', remaining: raw }
+  }
+
+  const addressLines = lines.filter((line) => looksLikeAddress(line) && !EMAIL_REGEX.test(line) && !PHONE_REGEX.test(line))
+  if (!addressLines.length) {
+    return { address: '', remaining: raw }
+  }
+
+  const address = normalizeWhitespace(addressLines.join(', '))
+  const remainingLines = lines.filter((line) => !addressLines.includes(line))
+  return {
+    address,
+    remaining: remainingLines.join(' '),
+  }
+}
+
 function defaultLeadForm() {
   return {
     name: '',
     email: '',
     phone: '',
+    address: '',
     country: '',
     product: '',
     date: new Date().toISOString().slice(0, 10),
     status: 'new',
   }
+}
+
+function toDateInputValue(value) {
+  if (!value) return new Date().toISOString().slice(0, 10)
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10)
+  return date.toISOString().slice(0, 10)
 }
 
 function buildPitch(lead) {
@@ -131,21 +237,69 @@ function detectCountry(raw) {
 }
 
 function parseLeadFromRaw(rawInput) {
+  const rawText = String(rawInput || '').trim()
   const raw = normalizeWhitespace(rawInput)
   if (!raw) {
     return { ...defaultLeadForm(), date: new Date().toISOString().slice(0, 10) }
   }
 
+  const tabColumns = rawText
+    .split(/\t+/)
+    .map((part) => normalizeWhitespace(part.replace(/^"|"$/g, '')))
+    .filter(Boolean)
+
+  const quotedAddressInfo = extractQuotedAddress(rawText)
+
   const emailMatch = raw.match(EMAIL_REGEX)
-  const phoneMatch = raw.match(PHONE_REGEX)
+  const phoneValue = pickBestPhone(raw)
   const dateMatch = raw.match(DATE_REGEX)
-  const countryInfo = detectCountry(raw)
+  const countryInfo = detectCountry(rawText)
+
+  let extractedAddress = ''
+
+  if (quotedAddressInfo.address) {
+    extractedAddress = quotedAddressInfo.address
+  } else {
+    const lineAddressInfo = extractAddressFromLines(rawText)
+    extractedAddress = lineAddressInfo.address
+  }
+
+  if (!extractedAddress && tabColumns.length >= 4) {
+    const tabAddress = tabColumns.find((part) => looksLikeAddress(part))
+    if (tabAddress) extractedAddress = tabAddress
+  }
 
   let remainder = raw
   if (emailMatch?.[0]) remainder = removeMatchedSegment(remainder, emailMatch[0])
-  if (phoneMatch?.[0]) remainder = removeMatchedSegment(remainder, phoneMatch[0])
+  if (phoneValue) remainder = removeMatchedSegment(remainder, phoneValue)
   if (dateMatch?.[0]) remainder = removeMatchedSegment(remainder, dateMatch[0])
   if (countryInfo.matchedAlias) remainder = removeMatchedSegment(remainder, countryInfo.matchedAlias)
+  if (extractedAddress) remainder = removeMatchedSegment(remainder, extractedAddress)
+
+  const addressCountryInfo = detectCountry(extractedAddress)
+  const effectiveCountry = countryInfo.country || addressCountryInfo.country
+  if (addressCountryInfo.matchedAlias && extractedAddress) {
+    extractedAddress = removeMatchedSegment(extractedAddress, addressCountryInfo.matchedAlias)
+  }
+
+  let tabName = ''
+  let tabProduct = ''
+  if (tabColumns.length >= 3) {
+    const nameCandidate = tabColumns.find((part) => part && !EMAIL_REGEX.test(part) && !pickBestPhone(part) && !looksLikeAddress(part) && part.split(' ').length <= 4)
+    if (nameCandidate) tabName = nameCandidate
+
+    tabProduct = tabColumns
+      .filter((part) => {
+        if (!part) return false
+        if (part === tabName) return false
+        if (EMAIL_REGEX.test(part)) return false
+        if (pickBestPhone(part)) return false
+        if (looksLikeAddress(part)) return false
+        if (detectCountry(part).country) return false
+        return true
+      })
+      .slice(-1)[0] || ''
+  }
 
   const tokens = normalizeWhitespace(remainder)
     .split(' ')
@@ -179,19 +333,26 @@ function parseLeadFromRaw(rawInput) {
   }
 
   const productTokens = tokens.slice(Math.max(0, nameTokens.length))
+  const parsedName = titleCaseWords(nameTokens.join(' '))
+  const tabParsedName = tabName ? titleCaseWords(tabName) : ''
+  const parsedProduct = normalizeWhitespace(productTokens.join(' '))
+  const tabParsedProduct = normalizeWhitespace(tabProduct)
+  const mergedProduct = tabParsedProduct || parsedProduct
+  const finalProduct = isLikelyMedicineProduct(mergedProduct) ? mergedProduct : ''
 
   return {
-    name: titleCaseWords(nameTokens.join(' ')),
+    name: tabParsedName || parsedName,
     email: normalizeWhitespace(emailMatch?.[0] || ''),
-    phone: normalizeWhitespace(phoneMatch?.[0] || ''),
-    country: countryInfo.country,
-    product: normalizeWhitespace(productTokens.join(' ')),
+    phone: normalizePhone(phoneValue),
+    address: normalizeWhitespace(extractedAddress),
+    country: effectiveCountry,
+    product: finalProduct,
     date: dateMatch?.[0] || new Date().toISOString().slice(0, 10),
     status: 'new',
   }
 }
 
-export function LeadsSection() {
+export function LeadsSection({ onLeadsChanged = () => Promise.resolve() }) {
   const [rawLead, setRawLead] = useState('')
   const [parsedLead, setParsedLead] = useState(defaultLeadForm)
   const [leads, setLeads] = useState([])
@@ -218,6 +379,10 @@ export function LeadsSection() {
   const [invoiceLead, setInvoiceLead] = useState(null)
   const [invoicePrice, setInvoicePrice] = useState('')
   const [invoiceQty, setInvoiceQty] = useState('1')
+
+  const [editLead, setEditLead] = useState(null)
+  const [editLeadForm, setEditLeadForm] = useState(defaultLeadForm)
+  const [updatingLead, setUpdatingLead] = useState(false)
 
   const canSaveLead = useMemo(() => {
     return Boolean(parsedLead.name && parsedLead.email && parsedLead.product && parsedLead.date)
@@ -251,6 +416,10 @@ export function LeadsSection() {
 
   function showToast(type, message) {
     setToast({ type, message })
+  }
+
+  function syncParentLeads() {
+    Promise.resolve(onLeadsChanged()).catch(() => {})
   }
 
   useEffect(() => {
@@ -321,6 +490,7 @@ export function LeadsSection() {
       setParsedLead(defaultLeadForm())
       setRawLead('')
       showToast('success', 'Lead saved successfully')
+      syncParentLeads()
     } catch (error) {
       showToast('error', error?.message || 'Failed to save lead')
     } finally {
@@ -334,6 +504,7 @@ export function LeadsSection() {
       const result = await apiPut(`/api/leads/${leadId}`, { status: nextStatus })
       setLeads((prev) => prev.map((lead) => (lead._id === leadId ? result.lead : lead)))
       showToast('success', 'Lead status updated')
+      syncParentLeads()
     } catch (error) {
       showToast('error', error?.message || 'Unable to update lead status')
     } finally {
@@ -350,6 +521,7 @@ export function LeadsSection() {
       await apiDelete(`/api/leads/${leadId}`)
       setLeads((prev) => prev.filter((lead) => lead._id !== leadId))
       showToast('success', 'Lead deleted')
+      syncParentLeads()
     } catch (error) {
       showToast('error', error?.message || 'Unable to delete lead')
     } finally {
@@ -393,6 +565,7 @@ export function LeadsSection() {
 
       setLeads((prev) => prev.map((item) => (item._id === lead._id ? result.lead : item)))
       showToast('success', 'Email sent to lead successfully')
+      syncParentLeads()
       return true
     } catch (error) {
       showToast('error', error?.message || 'Unable to send email')
@@ -430,6 +603,53 @@ export function LeadsSection() {
     setInvoiceLead(lead)
     setInvoicePrice('')
     setInvoiceQty('1')
+  }
+
+  function openEditModal(lead) {
+    setEditLead(lead)
+    setEditLeadForm({
+      name: lead?.name || '',
+      email: lead?.email || '',
+      phone: lead?.phone || '',
+      address: lead?.address || '',
+      country: lead?.country || '',
+      product: lead?.product || '',
+      date: toDateInputValue(lead?.date),
+      status: lead?.status || 'new',
+    })
+  }
+
+  async function handleSaveEditedLead() {
+    if (!editLead?._id) return
+
+    const payload = {
+      name: normalizeWhitespace(editLeadForm.name),
+      email: normalizeWhitespace(editLeadForm.email),
+      phone: normalizeWhitespace(editLeadForm.phone),
+      address: normalizeWhitespace(editLeadForm.address),
+      country: normalizeWhitespace(editLeadForm.country),
+      product: normalizeWhitespace(editLeadForm.product),
+      date: editLeadForm.date,
+      status: editLeadForm.status,
+    }
+
+    if (!payload.name || !payload.email || !payload.product || !payload.date) {
+      showToast('error', 'Name, Email, Product, and Date are required')
+      return
+    }
+
+    try {
+      setUpdatingLead(true)
+      const result = await apiPut(`/api/leads/${editLead._id}`, payload)
+      setLeads((prev) => prev.map((lead) => (lead._id === editLead._id ? result.lead : lead)))
+      showToast('success', 'Lead updated successfully')
+      setEditLead(null)
+      syncParentLeads()
+    } catch (error) {
+      showToast('error', error?.message || 'Unable to update lead')
+    } finally {
+      setUpdatingLead(false)
+    }
   }
 
   function downloadInvoice() {
@@ -536,6 +756,15 @@ export function LeadsSection() {
                 className="input"
                 value={parsedLead.phone}
                 onChange={(event) => setParsedLead((prev) => ({ ...prev, phone: event.target.value }))}
+              />
+            </label>
+            <label className="tw-space-y-1 md:tw-col-span-2">
+              <span className="tw-text-xs tw-font-semibold tw-text-slate-500">Address</span>
+              <input
+                className="input"
+                value={parsedLead.address}
+                onChange={(event) => setParsedLead((prev) => ({ ...prev, address: event.target.value }))}
+                placeholder="Street, city, postal code"
               />
             </label>
             <label className="tw-space-y-1">
@@ -645,6 +874,7 @@ export function LeadsSection() {
                     </td>
                     <td className="tw-px-3 tw-py-3">
                       <div className="tw-flex tw-flex-wrap tw-gap-2">
+                        <button type="button" className="btn secondary" onClick={() => openEditModal(lead)}>Edit</button>
                         <button type="button" className="btn secondary" onClick={() => openPitchModal(lead)}>Generate Pitch</button>
                         <button type="button" className="btn secondary" onClick={() => openEmailModal(lead)}>Send Email</button>
                         <button type="button" className="btn secondary" onClick={() => openInvoiceModal(lead)}>Generate Invoice</button>
@@ -748,6 +978,75 @@ export function LeadsSection() {
 
             <div className="tw-mt-4 tw-flex tw-gap-2">
               <button type="button" className="btn" onClick={downloadInvoice}>Download Invoice</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editLead ? (
+        <div className="modalOverlay" role="presentation" onClick={() => setEditLead(null)}>
+          <div className="modalCard tw-w-full tw-max-w-3xl" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <div className="tw-flex tw-items-start tw-justify-between tw-gap-4">
+              <div>
+                <h3 className="tw-text-lg tw-font-semibold tw-text-slate-900">Edit Lead</h3>
+                <p className="tw-text-sm tw-text-slate-500">Update lead details including name, email, address, and status.</p>
+              </div>
+              <button type="button" className="btn secondary" onClick={() => setEditLead(null)}>Close</button>
+            </div>
+
+            <div className="tw-mt-4 tw-grid tw-grid-cols-1 tw-gap-3 md:tw-grid-cols-2">
+              <label className="tw-space-y-1">
+                <span className="tw-text-xs tw-font-semibold tw-text-slate-500">Name</span>
+                <input className="input" value={editLeadForm.name} onChange={(event) => setEditLeadForm((prev) => ({ ...prev, name: event.target.value }))} />
+              </label>
+              <label className="tw-space-y-1">
+                <span className="tw-text-xs tw-font-semibold tw-text-slate-500">Email</span>
+                <input className="input" value={editLeadForm.email} onChange={(event) => setEditLeadForm((prev) => ({ ...prev, email: event.target.value }))} />
+              </label>
+              <label className="tw-space-y-1">
+                <span className="tw-text-xs tw-font-semibold tw-text-slate-500">Phone</span>
+                <input className="input" value={editLeadForm.phone} onChange={(event) => setEditLeadForm((prev) => ({ ...prev, phone: event.target.value }))} />
+              </label>
+              <label className="tw-space-y-1">
+                <span className="tw-text-xs tw-font-semibold tw-text-slate-500">Country</span>
+                <select className="input" value={editLeadForm.country} onChange={(event) => setEditLeadForm((prev) => ({ ...prev, country: event.target.value }))}>
+                  <option value="">Select country</option>
+                  {countryOptions.map((country) => (
+                    <option key={`edit-${country}`} value={country}>{country}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="tw-space-y-1 md:tw-col-span-2">
+                <span className="tw-text-xs tw-font-semibold tw-text-slate-500">Address</span>
+                <input
+                  className="input"
+                  value={editLeadForm.address}
+                  onChange={(event) => setEditLeadForm((prev) => ({ ...prev, address: event.target.value }))}
+                  placeholder="Street, city, postal code"
+                />
+              </label>
+              <label className="tw-space-y-1">
+                <span className="tw-text-xs tw-font-semibold tw-text-slate-500">Product</span>
+                <input className="input" value={editLeadForm.product} onChange={(event) => setEditLeadForm((prev) => ({ ...prev, product: event.target.value }))} />
+              </label>
+              <label className="tw-space-y-1">
+                <span className="tw-text-xs tw-font-semibold tw-text-slate-500">Date</span>
+                <input className="input" type="date" value={editLeadForm.date} onChange={(event) => setEditLeadForm((prev) => ({ ...prev, date: event.target.value }))} />
+              </label>
+              <label className="tw-space-y-1">
+                <span className="tw-text-xs tw-font-semibold tw-text-slate-500">Status</span>
+                <select className="input" value={editLeadForm.status} onChange={(event) => setEditLeadForm((prev) => ({ ...prev, status: event.target.value }))}>
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={`edit-status-${status.value}`} value={status.value}>{status.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="tw-mt-4 tw-flex tw-gap-2">
+              <button type="button" className="btn" onClick={handleSaveEditedLead} disabled={updatingLead}>
+                {updatingLead ? 'Saving...' : 'Save Changes'}
+              </button>
             </div>
           </div>
         </div>

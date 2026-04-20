@@ -6,6 +6,7 @@ export { DashboardCards } from './DashboardCards'
 export { InsightsPanel } from './InsightsPanel'
 export { LeadsSection } from './LeadsSection'
 export { OrdersTable } from './OrdersTable'
+export { PipelineBoard } from './pipeline'
 export { Sidebar } from './Sidebar'
 export {
   buildAlerts,

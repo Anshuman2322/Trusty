@@ -166,6 +166,27 @@ body[data-theme='dark'] .vdNavItem--logout {
   gap: 1.1rem;
 }
 
+.vdShell--pipeline {
+  height: calc(100dvh - 148px);
+  min-height: calc(100dvh - 148px);
+  overflow: hidden;
+  align-items: stretch;
+}
+
+.vdShell--pipeline .vdWorkspace {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vdContent--pipeline {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .vdSidebarScrim {
   border: 0;
   padding: 0;
@@ -2247,6 +2268,11 @@ body[data-theme='dark'] .vdStatus--pending {
   .vdShell {
     grid-template-columns: 1fr;
     min-height: auto;
+  }
+
+  .vdShell--pipeline {
+    height: 100dvh;
+    min-height: 100dvh;
   }
 
   .vdSidebar {
