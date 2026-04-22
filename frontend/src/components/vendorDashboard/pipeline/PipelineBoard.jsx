@@ -18,6 +18,16 @@ const STAGES = [
   { key: 'feedback_retention', label: 'Feedback & Retention' },
 ]
 
+const MONETARY_STAGES = new Set([
+  'invoice_sent',
+  'payment_pending',
+  'payment_received',
+  'order_processing',
+  'shipped',
+  'delivered',
+  'feedback_retention',
+])
+
 const ORDER_DELIVERY_MAP = {
   not_started: 'CREATED',
   processing: 'CREATED',
@@ -508,6 +518,7 @@ export function PipelineBoard({ vendorId, leads = [], orders = [], onRefresh, on
                 stage={stage}
                 records={grouped[stage.key] || []}
                 value={stageRevenue[stage.key] || 0}
+                showValue={MONETARY_STAGES.has(stage.key)}
               >
                 {(grouped[stage.key] || []).map((record) => (
                   <LeadCard

@@ -38,8 +38,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 22px 18px 14px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 16px 18px 8px;
 }
 
 .crmDrawerRecordId {
@@ -60,10 +59,20 @@
 }
 
 .crmDrawerCompany {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   font-size: 16px;
   line-height: 1.1;
   color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.crmDrawerCompanyIcon {
+  width: 14px;
+  height: 14px;
+  color: #64748b;
+  flex: 0 0 auto;
 }
 
 .crmDrawerAmountWrap {
@@ -94,7 +103,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 18px;
+  padding: 8px 18px 10px;
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -164,27 +173,40 @@
 
 .crmDrawerBody {
   overflow-y: auto;
-  padding: 14px 18px 24px;
+  padding: 12px 18px 22px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .crmDrawerActionGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 9px;
+  padding-bottom: 4px;
 }
 
 .crmDrawerActionBtn {
   border: 1px solid #d1dbe8;
   background: #ffffff;
   border-radius: 11px;
-  padding: 10px 10px;
+  min-height: 42px;
+  padding: 9px 12px;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   color: #334155;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.crmDrawerActionBtnIcon {
+  width: 16px;
+  height: 16px;
+  color: #334155;
+  flex: 0 0 auto;
 }
 
 .crmDrawerActionBtn:disabled {
@@ -194,11 +216,11 @@
 
 .crmDrawerSection {
   border-top: 1px solid #e2e8f0;
-  padding-top: 14px;
+  padding-top: 16px;
 }
 
 .crmDrawerSectionTitle {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -209,7 +231,7 @@
 .crmDrawerInfoGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
+  gap: 12px 16px;
 }
 
 .crmDrawerInfoWide {
@@ -225,10 +247,28 @@
   color: #64748b;
 }
 
+.crmDrawerLabelRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.crmDrawerLabelIcon {
+  width: 14px;
+  height: 14px;
+  color: #64748b;
+  flex: 0 0 auto;
+}
+
 .crmDrawerValue {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   font-size: 16px;
+  line-height: 1.35;
   color: #1e293b;
+}
+
+.crmDrawerValue--underLabel {
+  margin-left: 20px;
 }
 
 .crmDrawerSectionActions {
@@ -236,10 +276,24 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+.crmDrawerSectionActions .btn {
+  background: #74ccda;
+  border-color: #74ccda;
+  color: #ffffff;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.crmDrawerSectionActions .btn:hover {
+  background: #5fc1d0;
+  border-color: #5fc1d0;
 }
 
 .crmDrawerTimeline {
-  margin-top: 12px;
+  margin-top: 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -368,6 +422,61 @@
   display: block;
   margin-top: 3px;
   font-size: 12px;
+  color: #64748b;
+}
+
+.crmPitchModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.36);
+  display: grid;
+  place-items: center;
+  z-index: 95;
+  padding: 20px;
+}
+
+.crmPitchModalCard {
+  width: min(760px, calc(100vw - 40px));
+  background: #ffffff;
+  border: 1px solid #d9e2ee;
+  border-radius: 16px;
+  box-shadow: 0 24px 40px -28px rgba(15, 23, 42, 0.5);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.crmPitchModalHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.crmPitchModalHead h3 {
+  margin: 0;
+  font-size: 30px;
+  color: #1f2937;
+}
+
+.crmPitchModalHead p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.crmPitchModalActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.crmPitchModalTextLabel {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
   color: #64748b;
 }
 

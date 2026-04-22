@@ -853,6 +853,15 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
     return (orders || []).filter((order) => String(order.paymentStatus || '').toUpperCase() === 'PENDING')
   }, [orders])
 
+  const orderPriceCurrencyCode = useMemo(() => {
+    const raw = String(vendorSettings?.system?.currencyFormat || 'INR').toUpperCase()
+    return raw === 'USD' ? 'USD' : 'INR'
+  }, [vendorSettings?.system?.currencyFormat])
+
+  const orderPriceCurrencyLabel = useMemo(() => {
+    return orderPriceCurrencyCode === 'USD' ? '$' : 'INR'
+  }, [orderPriceCurrencyCode])
+
   const welcomeName = useMemo(() => {
     const directName = String(sessionState?.user?.name || sessionState?.user?.fullName || '').trim()
     if (directName) return directName
@@ -1388,12 +1397,15 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
                   />
                 </div>
                 <div className="field">
-                  <label>Price (INR) *</label>
+                  <label>Price ({orderPriceCurrencyLabel}) *</label>
                   <input
                     className="input"
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={createForm.price}
                     onChange={(event) => setCreateForm((state) => ({ ...state, price: event.target.value }))}
+                    placeholder={orderPriceCurrencyCode === 'USD' ? '$' : 'INR'}
                     required
                   />
                 </div>

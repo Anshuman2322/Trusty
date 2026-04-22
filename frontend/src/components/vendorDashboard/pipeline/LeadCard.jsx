@@ -55,10 +55,41 @@ function formatAmount(value) {
   return `$${num.toLocaleString()}`
 }
 
+function supportsMonetaryDetails(stage) {
+  const normalized = String(stage || '').toLowerCase()
+  return [
+    'invoice_sent',
+    'payment_pending',
+    'payment_received',
+    'order_processing',
+    'shipped',
+    'delivered',
+    'feedback_retention',
+  ].includes(normalized)
+}
+
+function supportsReputationTags(stage) {
+  return String(stage || '').toLowerCase() === 'feedback_retention'
+}
+
+function leadCreatedAtMeta(record) {
+  const raw = record?.createdAt
+  if (!raw) return null
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return null
+  return {
+    label: date.toLocaleDateString(),
+    full: date.toLocaleString(),
+  }
+}
+
 export function LeadCard({ record, linkedOrder, onOpen }) {
   const trustScore = Number(record?.trustScore)
   const followState = followUpTone(record?.followUpAt)
   const amount = Number(linkedOrder?.price || 0)
+  const showMonetaryDetails = supportsMonetaryDetails(record?.crmStage)
+  const showReputationTags = supportsReputationTags(record?.crmStage)
+  const createdAtMeta = leadCreatedAtMeta(record)
 
   return (
     <button
@@ -72,24 +103,28 @@ export function LeadCard({ record, linkedOrder, onOpen }) {
           <h4 className="crmLeadName">{record?.name || 'Unknown lead'}</h4>
           <p className="crmLeadCompany">{record?.email || 'No email'}</p>
         </div>
-        <span className={priorityTone(record?.priority)}>
-          {(record?.priority || 'medium').toUpperCase().slice(0, 3)}
-        </span>
+        {showReputationTags ? (
+          <span className={priorityTone(record?.priority)}>
+            {(record?.priority || 'medium').toUpperCase().slice(0, 3)}
+          </span>
+        ) : null}
       </div>
 
       <p className="crmLeadProduct">{record?.product || 'Product not set'}</p>
       <p className="crmLeadCountry">{record?.country || 'Country N/A'}</p>
 
-      <div className="crmLeadAmount">{formatAmount(amount)}</div>
+      {showMonetaryDetails ? <div className="crmLeadAmount">{formatAmount(amount)}</div> : null}
 
       <div className="crmLeadBadges">
         <span className="crmBadge crmBadge--status">
           {String(record?.status || 'new').replace('_', ' ')}
         </span>
-        <span className={paymentTone(record?.paymentStatus)}>
-          {String(record?.paymentStatus || 'not_started').replace('_', ' ')}
-        </span>
-        {Number.isFinite(trustScore) ? (
+        {showMonetaryDetails ? (
+          <span className={paymentTone(record?.paymentStatus)}>
+            {String(record?.paymentStatus || 'not_started').replace('_', ' ')}
+          </span>
+        ) : null}
+        {showReputationTags && Number.isFinite(trustScore) ? (
           <span className={trustTone(trustScore)}>
             Trust {Math.round(trustScore)}
           </span>
@@ -99,6 +134,12 @@ export function LeadCard({ record, linkedOrder, onOpen }) {
       {record?.followUpAt ? (
         <div className={`crmFollowUpTag ${followState ? `is-${followState}` : ''}`}>
           {followUpLabel(record.followUpAt)}
+        </div>
+      ) : null}
+
+      {createdAtMeta ? (
+        <div className="crmLeadCreatedAt" title={createdAtMeta.full}>
+          {createdAtMeta.label}
         </div>
       ) : null}
     </button>

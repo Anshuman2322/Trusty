@@ -51,7 +51,10 @@ function App() {
   const [topbarMenuOpen, setTopbarMenuOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const isMarketingRoute = ['/', '/how-it-works', '/vendor', '/public', '/about', '/transparency'].includes(location.pathname)
-  const isVendorWorkspaceRoute = location.pathname.startsWith('/vendor/dashboard') || location.pathname.startsWith('/vendor/analytics')
+  const isVendorWorkspaceRoute =
+    location.pathname.startsWith('/vendor/dashboard') ||
+    location.pathname.startsWith('/vendor/analytics') ||
+    location.pathname.startsWith('/vendor/app')
   const isAdminWorkspaceRoute = location.pathname.startsWith('/admin')
   const hideTopbar = isAdminWorkspaceRoute || (isVendorWorkspaceRoute && isVendorSession(session))
 
@@ -130,7 +133,7 @@ function App() {
   }
 
   return (
-    <div className={isAdminWorkspaceRoute ? 'app app--admin' : 'app'}>
+    <div className={isAdminWorkspaceRoute ? 'app app--admin' : isVendorWorkspaceRoute ? 'app app--vendor-workspace' : 'app'}>
       {!hideTopbar ? (
         <header
           className={`topbar sticky top-0 z-50 !min-h-[64px] !items-center !gap-3 !border-b transition-all duration-300 ${
@@ -291,7 +294,7 @@ function App() {
         </Routes>
       </main>
 
-      <Footer />
+      {!isVendorWorkspaceRoute ? <Footer /> : null}
 
       {!isAdminWorkspaceRoute ? <Chatbot /> : null}
     </div>

@@ -110,6 +110,10 @@
   padding: 0 clamp(12px, 2vw, 26px) 28px;
 }
 
+.app--vendor-workspace .container.container--workspace {
+  padding-bottom: 0;
+}
+
 @media (max-width: 1023px) {
   .container.container--workspace {
     padding: 0 12px 22px;

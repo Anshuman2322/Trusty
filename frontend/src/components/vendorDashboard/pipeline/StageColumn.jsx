@@ -5,7 +5,7 @@ function formatMoney(value) {
   return `$${num.toFixed(0)}`
 }
 
-export function StageColumn({ stage, records, value = 0, children }) {
+export function StageColumn({ stage, records, value = 0, showValue = true, children }) {
   return (
     <section className="crmStageWrap">
       <header className="crmStageMetaRow">
@@ -13,7 +13,7 @@ export function StageColumn({ stage, records, value = 0, children }) {
           <h3 className="crmStageTitlePill">{stage.label}</h3>
           <span className="crmStageCountBubble">{records.length}</span>
         </div>
-        <p className="crmStageValueOutside">{formatMoney(value)}</p>
+        {showValue ? <p className="crmStageValueOutside">{formatMoney(value)}</p> : null}
       </header>
 
       <div className="crmStageCol">
