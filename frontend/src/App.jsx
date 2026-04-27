@@ -18,6 +18,7 @@ import { Chatbot } from './components/Chatbot'
 import { Footer } from './components/Footer'
 import { apiGet } from './lib/api'
 import { getSession } from './lib/session'
+import { Toaster } from 'sonner'
 
 function getInitialTheme() {
   if (typeof window === 'undefined') return 'light'
@@ -297,6 +298,8 @@ function App() {
       {!isVendorWorkspaceRoute ? <Footer /> : null}
 
       {!isAdminWorkspaceRoute ? <Chatbot /> : null}
+
+      <Toaster position="top-right" richColors />
     </div>
   )
 }

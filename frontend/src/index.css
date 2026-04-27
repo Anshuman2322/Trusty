@@ -19,6 +19,24 @@
   --font-body: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
   --font-display: 'Sora', 'Trebuchet MS', sans-serif;
 
+  --tw-background: 210 33% 98%;
+  --tw-foreground: 222 47% 11%;
+  --tw-card: 0 0% 100%;
+  --tw-card-foreground: 222 47% 11%;
+  --tw-primary: 188 78% 42%;
+  --tw-primary-foreground: 0 0% 100%;
+  --tw-secondary: 210 20% 95%;
+  --tw-secondary-foreground: 222 47% 11%;
+  --tw-muted: 210 20% 95%;
+  --tw-muted-foreground: 215 16% 46%;
+  --tw-accent: 210 20% 95%;
+  --tw-accent-foreground: 222 47% 11%;
+  --tw-destructive: 0 72% 51%;
+  --tw-destructive-foreground: 0 0% 100%;
+  --tw-border: 214 32% 90%;
+  --tw-input: 214 32% 90%;
+  --tw-ring: 188 78% 42%;
+
   font-family: var(--font-body);
   line-height: 1.55;
   font-weight: 400;
@@ -59,6 +77,23 @@ body[data-theme='dark'] {
   --primary-dark: #3b82f6;
   --secondary: #34d399;
   --accent: #fbbf24;
+  --tw-background: 221 39% 11%;
+  --tw-foreground: 210 40% 96%;
+  --tw-card: 221 39% 14%;
+  --tw-card-foreground: 210 40% 96%;
+  --tw-primary: 188 74% 47%;
+  --tw-primary-foreground: 210 40% 98%;
+  --tw-secondary: 217 33% 17%;
+  --tw-secondary-foreground: 210 40% 96%;
+  --tw-muted: 217 33% 17%;
+  --tw-muted-foreground: 215 20% 70%;
+  --tw-accent: 217 33% 17%;
+  --tw-accent-foreground: 210 40% 96%;
+  --tw-destructive: 0 63% 45%;
+  --tw-destructive-foreground: 210 40% 98%;
+  --tw-border: 217 33% 24%;
+  --tw-input: 217 33% 24%;
+  --tw-ring: 188 74% 47%;
   background:
     radial-gradient(1200px 640px at 10% -20%, rgba(59, 130, 246, 0.15), transparent 60%),
     radial-gradient(900px 560px at 100% -10%, rgba(52, 211, 153, 0.12), transparent 62%),

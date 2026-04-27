@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ConfirmationModal } from '../components/admin/ConfirmationModal'
+import { CrmProvider } from '../crm/store'
+import { SalesCommandCenter } from '../crm/sales/SalesCommandCenter'
 import {
   AlertsPanel,
   AnalyticsPage,
@@ -40,6 +42,7 @@ const DELIVERY_OPTIONS = [
 
 const DASHBOARD_VIEWS = new Set([
   'dashboard',
+  'sales-command',
   'pipeline',
   'orders',
   'payments',
@@ -1109,6 +1112,14 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
           onRefresh={refresh}
           onError={setError}
         />
+      )
+    }
+
+    if (activeView === 'sales-command') {
+      return (
+        <CrmProvider>
+          <SalesCommandCenter />
+        </CrmProvider>
       )
     }
 
