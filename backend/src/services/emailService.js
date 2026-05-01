@@ -1,6 +1,16 @@
 const { httpError } = require('./authService');
 const { getDefaultSenderKey, getTransporter, resolveSenderConfig } = require('../utils/transporterFactory');
 
+function logEmailEvent(level, message, meta) {
+  const payload = {
+    at: new Date().toISOString(),
+    ...meta,
+  };
+
+  // eslint-disable-next-line no-console
+  console[level](message, payload);
+}
+
 function compactText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -70,9 +80,18 @@ function normalizeEmailError(error) {
   const responseCode = Number(error?.responseCode || 0);
   const code = String(error?.code || '').toUpperCase();
   const message = String(error?.message || 'Unable to send email').trim();
+  const networkErrorCodes = new Set(['ENETUNREACH', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EHOSTUNREACH', 'EAI_AGAIN']);
 
   if (code === 'EAUTH' || responseCode === 535) {
     return httpError(503, 'SMTP authentication failed for the selected sender', 'EMAIL_AUTH_FAILED');
+  }
+
+  if (networkErrorCodes.has(code) || /timeout/i.test(message)) {
+    return httpError(
+      503,
+      'Email delivery temporarily failed while connecting to Gmail SMTP. Please try again shortly.',
+      'EMAIL_CONNECTION_FAILED'
+    );
   }
 
   return httpError(503, message, 'EMAIL_DELIVERY_FAILED');
@@ -105,8 +124,7 @@ async function sendEmail({ sender, to, subject, html, body, text, cc, bcc, retri
   try {
     const { info, attempts } = await sendWithRetry(transporter, mailOptions, retries);
 
-    // eslint-disable-next-line no-console
-    console.info('[mail:sent]', {
+    logEmailEvent('info', '[mail:sent]', {
       sender: senderConfig.key,
       to: recipients,
       subject: resolvedSubject,
@@ -130,11 +148,12 @@ async function sendEmail({ sender, to, subject, html, body, text, cc, bcc, retri
       attempts,
     };
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('[mail:failed]', {
+    logEmailEvent('error', '[mail:failed]', {
       sender: senderConfig.key,
       to: recipients,
       subject: resolvedSubject,
+      code: error?.code,
+      responseCode: error?.responseCode,
       error: error?.message,
     });
     throw normalizeEmailError(error);

@@ -38,6 +38,19 @@ const SENDER_ALIASES = {
 
 const transporterCache = new Map();
 
+function getSmtpConnectionConfig() {
+  const host = String(process.env.SMTP_HOST || 'smtp.gmail.com').trim() || 'smtp.gmail.com';
+  const portRaw = String(process.env.SMTP_PORT || '587').trim() || '587';
+  const port = Number(portRaw);
+
+  return {
+    host,
+    port: Number.isFinite(port) ? port : 587,
+    secure: false,
+    family: 4,
+  };
+}
+
 function normalizeSenderKey(sender) {
   const normalized = String(sender || '').trim().toLowerCase();
   return SENDER_ALIASES[normalized] || normalized || 'henry';
@@ -79,8 +92,13 @@ function resolveSenderConfig(sender) {
 }
 
 function createTransporterOptions(credentials) {
+  const smtp = getSmtpConnectionConfig();
+
   return {
-    service: 'gmail',
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    family: smtp.family,
     auth: {
       user: credentials.user,
       pass: credentials.pass,
@@ -90,7 +108,7 @@ function createTransporterOptions(credentials) {
     maxMessages: 50,
     connectionTimeout: 10000,
     greetingTimeout: 10000,
-    socketTimeout: 20000,
+    socketTimeout: 10000,
     tls: {
       minVersion: 'TLSv1.2',
       rejectUnauthorized: true,
