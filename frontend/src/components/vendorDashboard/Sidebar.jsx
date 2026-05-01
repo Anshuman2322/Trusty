@@ -66,6 +66,15 @@ function SidebarIcon({ kind }) {
     )
   }
 
+  if (kind === 'templates') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 5h10l4 4v10H5V5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M9 10h6M9 14h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
   if (kind === 'sales-command') {
     return (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -125,6 +134,7 @@ function SidebarIcon({ kind }) {
 
 const MENU_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { key: 'templates', label: 'Templates', icon: 'templates' },
   { key: 'sales-command', label: 'Sales Command', icon: 'sales-command' },
   { key: 'pipeline', label: 'CRM Pipeline', icon: 'pipeline' },
   { key: 'orders', label: 'Orders', icon: 'orders' },

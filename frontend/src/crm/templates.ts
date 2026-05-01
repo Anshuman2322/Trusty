@@ -20,9 +20,10 @@ export type MessageTemplate = {
 }
 
 export const SENDER_ACCOUNTS: SenderAccount[] = [
-  { id: 'em1', channel: 'email', name: 'David Cohen', address: 'david@pharmaexports.co', initials: 'DC', toneColor: 'tw-bg-indigo-500' },
-  { id: 'em2', channel: 'email', name: 'Henry Park', address: 'henry@pharmaexports.co', initials: 'HP', toneColor: 'tw-bg-emerald-500' },
-  { id: 'em3', channel: 'email', name: 'Sarah Iyer', address: 'sarah@pharmaexports.co', initials: 'SI', toneColor: 'tw-bg-rose-500' },
+  { id: 'em1', channel: 'email', name: 'David Collins', address: 'davidcollins2322@gmail.com', initials: 'DC', toneColor: 'tw-bg-indigo-500' },
+  { id: 'em2', channel: 'email', name: 'Henry', address: 'henry10davis@gmail.com', initials: 'H', toneColor: 'tw-bg-emerald-500' },
+  { id: 'em3', channel: 'email', name: 'David', address: 'david210william@gmail.com', initials: 'D', toneColor: 'tw-bg-rose-500' },
+  { id: 'em4', channel: 'email', name: 'John Parsall', address: 'johnparsall3066@gmail.com', initials: 'JP', toneColor: 'tw-bg-blue-500' },
   { id: 'wa1', channel: 'whatsapp', name: 'India WhatsApp Desk', address: '+91 98XXX 12345', initials: 'WA', toneColor: 'tw-bg-emerald-500' },
   { id: 'sms1', channel: 'sms', name: 'Twilio Main', address: '+1 555 010 7788', initials: 'SM', toneColor: 'tw-bg-slate-500' },
 ]

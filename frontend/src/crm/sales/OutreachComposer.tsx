@@ -9,10 +9,20 @@ import { SENDER_ACCOUNTS, TEMPLATES, interpolate } from './templates'
 import type { Channel } from './templates'
 import type { CrmRecord } from '../types'
 
+const VENDOR_TEMPLATE_STORAGE_KEY = 'trusty.vendor.templates.v1'
+
 type ChannelDraft = {
   senderId: string
   templateId: string
   subject: string
+  body: string
+}
+
+type ComposerTemplate = {
+  id: string
+  name: string
+  description?: string
+  subject?: string
   body: string
 }
 
@@ -33,16 +43,52 @@ function buildInitialDraft(channel: Channel): ChannelDraft {
   }
 }
 
+function readTemplatesFromVendorStudio(channel: Channel): ComposerTemplate[] {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const raw = window.localStorage.getItem(VENDOR_TEMPLATE_STORAGE_KEY)
+    if (!raw) return []
+
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .filter((item) => item && item.channel === channel && typeof item.body === 'string' && item.body.trim())
+      .map((item, index) => ({
+        id: `vendor-${channel}-${item.id || index}`,
+        name: typeof item.name === 'string' && item.name.trim() ? item.name : `Custom ${channel} template ${index + 1}`,
+        description: typeof item.description === 'string' ? item.description : 'From Templates section',
+        subject: typeof item.subject === 'string' ? item.subject : '',
+        body: String(item.body || ''),
+      }))
+  } catch {
+    return []
+  }
+}
+
 export function OutreachComposer({
   record,
   onSend,
 }: {
   record: CrmRecord
-  onSend: (payload: { channel: Channel; subject: string; body: string; senderLabel: string }) => void
+  onSend: (payload: {
+    channel: Channel
+    subject: string
+    body: string
+    senderId: string
+    senderAddress: string
+    senderLabel: string
+  }) => void | Promise<void>
 }) {
   const [channel, setChannel] = React.useState<Channel>('email')
   const [openMenu, setOpenMenu] = React.useState<null | 'sender' | 'template'>(null)
   const menuRootRef = React.useRef<HTMLDivElement | null>(null)
+  const [vendorTemplates, setVendorTemplates] = React.useState<Record<Channel, ComposerTemplate[]>>({
+    email: [],
+    whatsapp: [],
+    sms: [],
+  })
   const [drafts, setDrafts] = React.useState<Record<Channel, ChannelDraft>>({
     email: buildInitialDraft('email'),
     whatsapp: buildInitialDraft('whatsapp'),
@@ -61,7 +107,39 @@ export function OutreachComposer({
     [draft.senderId, senders],
   )
 
-  const templates = React.useMemo(() => TEMPLATES[channel], [channel])
+  React.useEffect(() => {
+    const refreshVendorTemplates = () => {
+      setVendorTemplates({
+        email: readTemplatesFromVendorStudio('email'),
+        whatsapp: readTemplatesFromVendorStudio('whatsapp'),
+        sms: readTemplatesFromVendorStudio('sms'),
+      })
+    }
+
+    refreshVendorTemplates()
+    window.addEventListener('storage', refreshVendorTemplates)
+    return () => {
+      window.removeEventListener('storage', refreshVendorTemplates)
+    }
+  }, [])
+
+  const templates = React.useMemo(() => {
+    const base = TEMPLATES[channel]
+    const custom = vendorTemplates[channel]
+    if (!custom.length) return base
+
+    const seenIds = new Set(base.map((item) => item.id))
+    const merged: ComposerTemplate[] = [...base]
+
+    for (const item of custom) {
+      const nextId = seenIds.has(item.id) ? `${item.id}-${Math.random().toString(36).slice(2, 6)}` : item.id
+      seenIds.add(nextId)
+      merged.push({ ...item, id: nextId })
+    }
+
+    return merged
+  }, [channel, vendorTemplates])
+
   const selectedTemplate = React.useMemo(
     () => templates.find((item) => item.id === draft.templateId) || templates[0] || null,
     [draft.templateId, templates],
@@ -126,7 +204,7 @@ export function OutreachComposer({
     setOpenMenu(null)
   }
 
-  function onSendNow() {
+  async function onSendNow() {
     const fallbackSubject = renderedBody.slice(0, 40)
     const finalSubject = channel === 'email' ? draft.subject.trim() || fallbackSubject : fallbackSubject
     const finalBody = renderedBody.trim()
@@ -136,14 +214,14 @@ export function OutreachComposer({
       return
     }
 
-    onSend({
+    await onSend({
       channel,
       subject: finalSubject,
       body: finalBody,
+      senderId: sender?.id || '',
+      senderAddress: sender?.address || '',
       senderLabel: sender ? `${sender.name} <${sender.address}>` : 'Unknown sender',
     })
-
-    toast.success(`${channel.toUpperCase()} sent to ${record.basicInfo.email || record.basicInfo.phone}`)
 
     updateDraft({ templateId: '', subject: '', body: '' })
   }

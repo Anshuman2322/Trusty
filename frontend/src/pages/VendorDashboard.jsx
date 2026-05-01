@@ -13,6 +13,7 @@ import {
   LeadsSection,
   OrdersTable,
   PipelineBoard,
+  TemplatesStudio,
   Sidebar,
   buildAlerts,
   buildCustomerInsights,
@@ -42,6 +43,7 @@ const DELIVERY_OPTIONS = [
 
 const DASHBOARD_VIEWS = new Set([
   'dashboard',
+  'templates',
   'sales-command',
   'pipeline',
   'orders',
@@ -1101,6 +1103,10 @@ export function VendorDashboard({ initialView = 'dashboard' }) {
           />
         </>
       )
+    }
+
+    if (activeView === 'templates') {
+      return <TemplatesStudio />
     }
 
     if (activeView === 'pipeline') {

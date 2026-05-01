@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { getDefaultSenderKey, normalizeSenderKey, resolveSenderConfig } = require('./transporterFactory');
 
 let cachedTransport = null;
 
@@ -24,25 +25,37 @@ function getEmailConfig() {
   const pass = String(process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || '')
     .replace(/\s+/g, '')
     .trim();
-  const host = String(process.env.SMTP_HOST || 'smtp.gmail.com').trim();
-  const portRaw = String(process.env.SMTP_PORT || '587').trim();
-  const port = Number(portRaw);
-  const secureRaw = String(process.env.SMTP_SECURE || '').trim().toLowerCase();
-  const secure =
-    secureRaw === 'true' ||
-    secureRaw === '1' ||
-    (secureRaw === '' && Number.isFinite(port) && port === 465);
   const from = String(process.env.SMTP_FROM || user || '').trim();
 
-  return {
-    user,
-    pass,
-    host,
-    port: Number.isFinite(port) ? port : 587,
-    secure,
-    from,
-    isConfigured: Boolean(user && pass),
-  };
+  if (user && pass) {
+    return {
+      user,
+      pass,
+      from,
+      isConfigured: true,
+      source: 'legacy',
+    };
+  }
+
+  try {
+    const senderConfig = resolveSenderConfig(normalizeSenderKey(process.env.SMTP_DEFAULT_SENDER || getDefaultSenderKey()));
+    return {
+      user: senderConfig.user,
+      pass: senderConfig.pass,
+      from: senderConfig.from,
+      isConfigured: true,
+      source: 'sender',
+    };
+  } catch (error) {
+    return {
+      user: '',
+      pass: '',
+      from: '',
+      isConfigured: false,
+      source: 'missing',
+      error,
+    };
+  }
 }
 
 function getTransporter() {
@@ -60,9 +73,7 @@ function getTransporter() {
   }
 
   cachedTransport = nodemailer.createTransport({
-    host: cfg.host,
-    port: cfg.port,
-    secure: cfg.secure,
+    service: 'gmail',
     auth: { user: cfg.user, pass: cfg.pass },
     tls: {
       minVersion: 'TLSv1.2',

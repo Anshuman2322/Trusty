@@ -5,7 +5,9 @@ import { Badge } from '../../components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { Textarea } from '../../components/ui/textarea'
 import { toast } from 'sonner'
+import { apiPost } from '../../lib/api'
 import type { Channel } from './templates'
+import { SENDER_ACCOUNTS } from './templates'
 import { STAGE_META } from '../types'
 import type { Activity as CrmActivity, CrmRecord, Note, Stage } from '../types'
 import { OutreachComposer } from './OutreachComposer'
@@ -48,6 +50,28 @@ function timelineDotClass(kind: CrmActivity['kind']) {
 function shortTitle(channel: Channel, subject: string, body: string) {
   const channelLabel = channel.charAt(0).toUpperCase() + channel.slice(1)
   return `${channelLabel} sent: ${subject || body.slice(0, 40)}`
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function senderKeyFromPayload(payload: { senderId: string; senderAddress: string; senderLabel: string }) {
+  const sender = SENDER_ACCOUNTS.find((account) => account.id === payload.senderId || account.address === payload.senderAddress)
+  if (sender?.address === 'henry10davis@gmail.com') return 'henry'
+  if (sender?.address === 'david210william@gmail.com') return 'david'
+  if (sender?.address === 'johnparsall3066@gmail.com') return 'john'
+
+  const label = `${payload.senderLabel || ''} ${payload.senderAddress || ''}`.toLowerCase()
+  if (label.includes('henry10davis@gmail.com')) return 'henry'
+  if (label.includes('david210william@gmail.com')) return 'david'
+  if (label.includes('johnparsall3066@gmail.com')) return 'john'
+  return 'henry'
 }
 
 function formatDate(iso?: string | null) {
@@ -122,8 +146,29 @@ export function LeadProfilePane({ activeId }: { activeId: string | null }) {
     toast.success('Lead marked as hot')
   }
 
-  function onSend(payload: { channel: Channel; subject: string; body: string; senderLabel: string }) {
+  async function onSend(payload: { channel: Channel; subject: string; body: string; senderId: string; senderAddress: string; senderLabel: string }) {
     const now = new Date().toISOString()
+    const recipient = String(record.basicInfo.email || '').trim()
+
+    if (payload.channel === 'email') {
+      if (!recipient) {
+        toast.error('Lead email address is missing')
+        return
+      }
+
+      try {
+        await apiPost('/api/send-email', {
+          sender: senderKeyFromPayload(payload),
+          to: recipient,
+          subject: payload.subject,
+          html: `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#0f172a;white-space:pre-wrap;">${escapeHtml(payload.body)}</div>`,
+        })
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to send email')
+        return
+      }
+    }
+
     const nextActivity: CrmActivity = {
       kind: payload.channel,
       title: shortTitle(payload.channel, payload.subject, payload.body),
@@ -135,6 +180,13 @@ export function LeadProfilePane({ activeId }: { activeId: string | null }) {
     patchRecord({
       activity: [...record.activity, nextActivity],
     })
+
+    if (payload.channel === 'email') {
+      toast.success(`Email sent to ${recipient}`)
+      return
+    }
+
+    toast.success(`${payload.channel.toUpperCase()} sent`)
   }
 
   function onAddNote() {
