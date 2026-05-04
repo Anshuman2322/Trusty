@@ -5,9 +5,11 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { Textarea } from '../../components/ui/textarea'
-import { SENDER_ACCOUNTS, TEMPLATES, interpolate } from './templates'
+import { TemplateVariableModal } from '../../components/email/TemplateVariableModal'
+import { SENDER_ACCOUNTS, TEMPLATES } from './templates'
 import type { Channel } from './templates'
 import type { CrmRecord } from '../types'
+import { renderTemplate } from '../templateVariables'
 
 const VENDOR_TEMPLATE_STORAGE_KEY = 'trusty.vendor.templates.v1'
 
@@ -18,12 +20,40 @@ type ChannelDraft = {
   body: string
 }
 
+type DraftMeta = {
+  isTemplateSynced: boolean
+  lastRecordId: string
+  lastTemplateId: string
+  lastSenderId: string
+}
+
 type ComposerTemplate = {
   id: string
   name: string
   description?: string
   subject?: string
   body: string
+}
+
+function buildComposerTemplateData(record: CrmRecord, sender: { name: string; address?: string } | null) {
+  const name = String(record.basicInfo.name || '').trim()
+  const firstName = name.split(' ')[0] || ''
+  return {
+    name,
+    firstName,
+    product: record.product.name || '',
+    quantity: record.product.quantity ?? '',
+    price: record.dealValue ?? '',
+    total_amount: record.dealValue ?? '',
+    email: record.basicInfo.email || '',
+    phone: record.basicInfo.phone || '',
+    company: record.basicInfo.company || '',
+    country: record.basicInfo.country || '',
+    senderName: sender?.name ?? '',
+    rep_name: sender?.name ?? '',
+    rep_email: sender?.address ?? '',
+    date: new Date().toISOString().slice(0, 10),
+  }
 }
 
 const CHANNEL_META: Array<{ key: Channel; label: string; icon: React.ComponentType<{ className?: string }> }> = [
@@ -79,6 +109,7 @@ export function OutreachComposer({
     senderId: string
     senderAddress: string
     senderLabel: string
+    formData?: Record<string, string>
   }) => void | Promise<void>
 }) {
   const [channel, setChannel] = React.useState<Channel>('email')
@@ -94,6 +125,12 @@ export function OutreachComposer({
     whatsapp: buildInitialDraft('whatsapp'),
     sms: buildInitialDraft('sms'),
   })
+  const [draftMeta, setDraftMeta] = React.useState<Record<Channel, DraftMeta>>({
+    email: { isTemplateSynced: true, lastRecordId: '', lastTemplateId: '', lastSenderId: '' },
+    whatsapp: { isTemplateSynced: true, lastRecordId: '', lastTemplateId: '', lastSenderId: '' },
+    sms: { isTemplateSynced: true, lastRecordId: '', lastTemplateId: '', lastSenderId: '' },
+  })
+  const [templateModalOpen, setTemplateModalOpen] = React.useState(false)
 
   const draft = drafts[channel]
 
@@ -145,9 +182,14 @@ export function OutreachComposer({
     [draft.templateId, templates],
   )
 
+  const templateAutoData = React.useMemo(
+    () => buildComposerTemplateData(record, sender),
+    [record, sender],
+  )
+
   const renderedBody = React.useMemo(
-    () => interpolate(draft.body || '', record, sender),
-    [draft.body, record, sender],
+    () => renderTemplate(draft.body || '', templateAutoData),
+    [draft.body, templateAutoData],
   )
 
   function updateDraft(next: Partial<ChannelDraft>) {
@@ -160,17 +202,43 @@ export function OutreachComposer({
     }))
   }
 
+  function updateDraftMeta(next: Partial<DraftMeta>) {
+    setDraftMeta((prev) => ({
+      ...prev,
+      [channel]: {
+        ...prev[channel],
+        ...next,
+      },
+    }))
+  }
+
+  function applyTemplateToDraft(template: ComposerTemplate | null, options?: { keepTemplateId?: boolean }) {
+    if (!template) return
+    const nextSubject = template.subject ? renderTemplate(template.subject, templateAutoData) : ''
+    const nextBody = renderTemplate(template.body, templateAutoData)
+
+    updateDraft({
+      templateId: options?.keepTemplateId ? draft.templateId : template.id,
+      subject: nextSubject,
+      body: nextBody,
+    })
+
+    updateDraftMeta({
+      isTemplateSynced: true,
+      lastTemplateId: template.id,
+      lastSenderId: sender?.id || '',
+      lastRecordId: record.id,
+    })
+  }
+
   React.useEffect(() => {
-    if (draft.body.trim()) return
     const firstTemplate = templates[0]
     if (!firstTemplate) return
-    const senderForTemplate = sender || null
-    updateDraft({
-      templateId: firstTemplate.id,
-      subject: firstTemplate.subject ? interpolate(firstTemplate.subject, record, senderForTemplate) : '',
-      body: interpolate(firstTemplate.body, record, senderForTemplate),
-    })
-  }, [channel])
+
+    if (!draft.body.trim() || draftMeta[channel].lastRecordId !== record.id) {
+      applyTemplateToDraft(selectedTemplate || firstTemplate)
+    }
+  }, [channel, record.id, templates, selectedTemplate, draft.body, draftMeta[channel].lastRecordId])
 
   React.useEffect(() => {
     function onDocumentClick(event: MouseEvent) {
@@ -187,43 +255,23 @@ export function OutreachComposer({
 
   function onTemplateChange(templateId: string) {
     const template = templates.find((item) => item.id === templateId)
-    const senderForTemplate = sender || null
-
-    updateDraft({
-      templateId,
-      subject: template?.subject ? interpolate(template.subject, record, senderForTemplate) : draft.subject,
-      body: template ? interpolate(template.body, record, senderForTemplate) : draft.body,
-    })
+    if (!template) return
+    applyTemplateToDraft(template)
   }
 
   function onSenderChange(senderId: string) {
+    const nextSender = senders.find((account) => account.id === senderId) || null
+    const nextTemplateData = buildComposerTemplateData(record, nextSender)
     updateDraft({ senderId })
-    if (draft.templateId) {
-      onTemplateChange(draft.templateId)
-    }
+    updateDraftMeta({ lastSenderId: senderId })
+    const nextSubject = renderTemplate(draft.subject || '', nextTemplateData)
+    const nextBody = renderTemplate(draft.body || '', nextTemplateData)
+    updateDraft({ subject: nextSubject, body: nextBody })
     setOpenMenu(null)
   }
 
-  async function onSendNow() {
-    const fallbackSubject = renderedBody.slice(0, 40)
-    const finalSubject = channel === 'email' ? draft.subject.trim() || fallbackSubject : fallbackSubject
-    const finalBody = renderedBody.trim()
-
-    if (!finalBody) {
-      toast.error('Message body is required')
-      return
-    }
-
-    await onSend({
-      channel,
-      subject: finalSubject,
-      body: finalBody,
-      senderId: sender?.id || '',
-      senderAddress: sender?.address || '',
-      senderLabel: sender ? `${sender.name} <${sender.address}>` : 'Unknown sender',
-    })
-
-    updateDraft({ templateId: '', subject: '', body: '' })
+  function onPreview() {
+    setTemplateModalOpen(true)
   }
 
   function onSaveDraft() {
@@ -316,7 +364,14 @@ export function OutreachComposer({
       {channel === 'email' ? (
         <div className="tw-space-y-1">
           <p className="tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wider tw-text-slate-500">Subject</p>
-          <Input className="tw-h-11 tw-rounded-xl tw-border-slate-200 tw-text-[16px] tw-text-base" value={draft.subject} onChange={(event) => updateDraft({ subject: event.target.value })} />
+          <Input
+            className="tw-h-11 tw-rounded-xl tw-border-slate-200 tw-text-[16px] tw-text-base"
+            value={draft.subject}
+            onChange={(event) => {
+              updateDraft({ subject: event.target.value })
+              updateDraftMeta({ isTemplateSynced: false })
+            }}
+          />
         </div>
       ) : null}
 
@@ -325,7 +380,10 @@ export function OutreachComposer({
         <Textarea
           className="tw-min-h-[240px] tw-rounded-xl tw-border-slate-200 tw-text-[15px] tw-leading-7"
           value={draft.body}
-          onChange={(event) => updateDraft({ body: event.target.value })}
+          onChange={(event) => {
+            updateDraft({ body: event.target.value })
+            updateDraftMeta({ isTemplateSynced: false })
+          }}
         />
         <p className="tw-text-[11px] tw-text-slate-500">Preview: {renderedBody || 'Type message to preview token interpolation.'}</p>
       </div>
@@ -333,12 +391,44 @@ export function OutreachComposer({
       <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-end tw-gap-2">
         <div className="tw-flex tw-items-center tw-gap-2">
           <Button variant="ghost" onClick={onSaveDraft}>Save draft</Button>
-          <Button onClick={onSendNow}>
+          <Button onClick={onPreview}>
             <Send className="tw-h-4 tw-w-4" />
-            {`Send via ${channel === 'email' ? 'Email' : channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}`}
+            Preview
           </Button>
         </div>
       </div>
+
+      <TemplateVariableModal
+        open={templateModalOpen}
+        templateSubject={draft.subject}
+        templateBody={draft.body}
+        autoData={templateAutoData}
+        clientKey={String(record.basicInfo.email || record.id || '').trim()}
+        onClose={() => setTemplateModalOpen(false)}
+        onSend={async (finalSubject, finalBody, formData) => {
+          const fallbackSubject = String(finalBody || '').slice(0, 40)
+          const subject = channel === 'email' ? String(finalSubject || '').trim() || fallbackSubject : fallbackSubject
+          const body = String(finalBody || '').trim()
+
+          if (!body) {
+            toast.error('Message body is required')
+            return
+          }
+
+          await onSend({
+            channel,
+            subject,
+            body,
+            senderId: sender?.id || '',
+            senderAddress: sender?.address || '',
+            senderLabel: sender ? `${sender.name} <${sender.address}>` : 'Unknown sender',
+            formData,
+          })
+
+          setTemplateModalOpen(false)
+          updateDraft({ templateId: '', subject: '', body: '' })
+        }}
+      />
     </div>
   )
 }

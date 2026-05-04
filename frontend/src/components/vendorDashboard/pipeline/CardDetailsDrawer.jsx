@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './RecordDrawer.css'
+import { TemplateVariableModal } from '../../email/TemplateVariableModal'
 
 const DELIVERY_STATUS_OPTIONS = [
   'not_started',
@@ -27,6 +28,13 @@ function localDateTimeInput(value) {
   if (Number.isNaN(date.getTime())) return ''
   const tzOffset = date.getTimezoneOffset() * 60000
   return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16)
+}
+
+function safeDateInput(value) {
+  if (!value) return new Date().toISOString().slice(0, 10)
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10)
+  return date.toISOString().slice(0, 10)
 }
 
 function currency(value) {
@@ -62,6 +70,36 @@ function companyName(record) {
   const domain = email.split('@')[1] || ''
   const raw = domain.split('.')[0] || 'Customer'
   return raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
+function buildAutoTemplateData(record, form) {
+  const name = String(form?.name || record?.name || '').trim()
+  const firstName = name.split(' ')[0] || ''
+  const product = String(form?.product || record?.product || '').trim()
+  const quantity = record?.quantity ?? ''
+  const orderAmount = record?.orderAmount ?? ''
+  const trackingLink = record?.trackingRef || form?.trackingRef || ''
+
+  return {
+    name,
+    firstName,
+    email: String(form?.email || record?.email || '').trim(),
+    phone: String(form?.phone || record?.phone || '').trim(),
+    address: String(form?.address || record?.address || '').trim(),
+    country: String(form?.country || record?.country || '').trim(),
+    product,
+    dosage: record?.dosage || '',
+    quantity,
+    price: record?.price ?? '',
+    total_amount: orderAmount,
+    payment_link: record?.paymentLink || '',
+    tracking_link: trackingLink,
+    trackingRef: trackingLink,
+    order_id: record?._id || '',
+    company: companyName(record),
+    rep_name: record?.vendorName || '',
+    date: new Date().toISOString().slice(0, 10),
+  }
 }
 
 function nextStage(stageMap, current) {
@@ -405,17 +443,23 @@ export function CardDetailsDrawer({
   const [smsBody, setSmsBody] = useState('')
   const [pitchModalOpen, setPitchModalOpen] = useState(false)
   const [showTextMessageFormat, setShowTextMessageFormat] = useState(false)
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [templateModalPayload, setTemplateModalPayload] = useState({ subject: '', body: '' })
+  const autoTemplateData = useMemo(
+    () => buildAutoTemplateData(record, form),
+    [record, form],
+  )
 
   useEffect(() => {
     if (!record) return
     setForm({
-      name: record?.name || '',
-      email: record?.email || '',
-      phone: record?.phone || '',
-      address: record?.address || '',
-      country: record?.country || '',
-      product: record?.product || '',
-      date: record?.date ? new Date(record.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      name: String(record?.name || ''),
+      email: String(record?.email || ''),
+      phone: String(record?.phone || ''),
+      address: String(record?.address || ''),
+      country: String(record?.country || ''),
+      product: String(record?.product || ''),
+      date: safeDateInput(record?.date),
       status: record?.status || 'new',
       crmStage: record?.crmStage || 'new_lead',
       priority: record?.priority || 'medium',
@@ -425,7 +469,7 @@ export function CardDetailsDrawer({
       trustScore: record?.trustScore ?? '',
       sentiment: record?.sentiment || '',
       nextPurchaseProbability: record?.nextPurchaseProbability ?? '',
-      trackingRef: record?.trackingRef || '',
+      trackingRef: String(record?.trackingRef || ''),
     })
     setNoteText('')
     const seed = onGeneratePitch(record)
@@ -496,6 +540,11 @@ export function CardDetailsDrawer({
     window.open(`mailto:${encodeURIComponent(String(form.email || ''))}?subject=${subject}&body=${body}`, '_self')
   }
 
+  function handleOpenTemplateModal() {
+    setTemplateModalPayload({ subject: emailSubject, body: emailBody })
+    setTemplateModalOpen(true)
+  }
+
   async function copyToClipboard(textInput) {
     const text = String(textInput || '').trim()
     if (!text) return
@@ -528,7 +577,7 @@ export function CardDetailsDrawer({
         <div className="crmDrawerHeader">
           <div>
             <p className="crmDrawerRecordId">{recordIdText(record)}</p>
-            <h3 className="crmDrawerName">{record.name || 'CRM Record'}</h3>
+            <h3 className="crmDrawerName">{String(record?.name || 'CRM Record')}</h3>
             <p className="crmDrawerCompany"><DrawerIcon name="building" className="crmDrawerCompanyIcon" />{companyName(record)}</p>
           </div>
           {showMonetaryControls || showTopTrust ? (
@@ -601,7 +650,7 @@ export function CardDetailsDrawer({
               </div>
               <div>
                 <span className="crmDrawerLabel crmDrawerLabelRow"><DrawerIcon name="quantity" className="crmDrawerLabelIcon" />Quantity</span>
-                <p className="crmDrawerValue crmDrawerValue--underLabel">{record?.quantity || 'N/A'}</p>
+                <p className="crmDrawerValue crmDrawerValue--underLabel">{String(record?.quantity || 'N/A')}</p>
               </div>
               <div className="crmDrawerInfoWide">
                 <span className="crmDrawerLabel crmDrawerLabelRow"><DrawerIcon name="followUp" className="crmDrawerLabelIcon" />Follow-up</span>
@@ -683,7 +732,7 @@ export function CardDetailsDrawer({
             <div className="crmPitchModalHead">
               <div>
                 <h3>Email Pitch Generator</h3>
-                <p>Dynamic pitch for {record?.name || 'lead'}.</p>
+                <p>Dynamic pitch for {String(record?.name || 'lead')}.</p>
               </div>
               <button type="button" className="btn secondary" onClick={() => setPitchModalOpen(false)}>Close</button>
             </div>
@@ -724,7 +773,7 @@ export function CardDetailsDrawer({
                 type="button"
                 className="btn"
                 disabled={saving || !String(emailBody || '').trim()}
-                onClick={() => onSendEmail(record, emailSubject, emailBody)}
+                onClick={handleOpenTemplateModal}
               >
                 Send Email
               </button>
@@ -732,6 +781,19 @@ export function CardDetailsDrawer({
           </div>
         </div>
       ) : null}
+
+      <TemplateVariableModal
+        open={templateModalOpen}
+        templateSubject={templateModalPayload.subject}
+        templateBody={templateModalPayload.body}
+        autoData={autoTemplateData}
+        clientKey={String(form?.email || record?.email || record?._id || '').trim()}
+        onClose={() => setTemplateModalOpen(false)}
+        onSend={async (finalSubject, finalBody) => {
+          await onSendEmail(record, finalSubject, finalBody)
+          setTemplateModalOpen(false)
+        }}
+      />
     </div>
   )
 }

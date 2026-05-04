@@ -21,14 +21,34 @@ const TONES = [
 
 const VARIABLE_CHIPS = [
   { label: 'Name', token: '{{name}}' },
+  { label: 'Email', token: '{{email}}' },
+  { label: 'Phone', token: '{{phone}}' },
+  { label: 'Company Name', token: '{{company_name}}' },
   { label: 'Product', token: '{{product}}' },
   { label: 'Dosage', token: '{{dosage}}' },
   { label: 'Quantity', token: '{{quantity}}' },
-  { label: 'Country', token: '{{country}}' },
-  { label: 'Rep Name', token: '{{rep_name}}' },
   { label: 'Price', token: '{{price}}' },
+  { label: 'Currency', token: '{{currency}}' },
+  { label: 'Total Amount', token: '{{total_amount}}' },
+  { label: 'Country', token: '{{country}}' },
+  { label: 'Shipping Address', token: '{{shipping_address}}' },
+  { label: 'City', token: '{{city}}' },
+  { label: 'Postal Code', token: '{{postal_code}}' },
+  { label: 'Payment Link', token: '{{payment_link}}' },
+  { label: 'Invoice ID', token: '{{invoice_id}}' },
+  { label: 'Invoice Link', token: '{{invoice_link}}' },
+  { label: 'Rep Name', token: '{{rep_name}}' },
+  { label: 'Rep Email', token: '{{rep_email}}' },
   { label: 'Tracking Link', token: '{{tracking_link}}' },
+  { label: 'Tracking ID', token: '{{tracking_id}}' },
   { label: 'Order ID', token: '{{order_id}}' },
+  { label: 'Lead ID', token: '{{lead_id}}' },
+  { label: 'Status', token: '{{status}}' },
+  { label: 'Date', token: '{{date}}' },
+  { label: 'Expected Delivery', token: '{{expected_delivery}}' },
+  { label: 'Follow-up Date', token: '{{followup_date}}' },
+  { label: 'Feedback Link', token: '{{feedback_link}}' },
+  { label: 'Rating Link', token: '{{rating_link}}' },
 ]
 
 const SAMPLE_REPS = [
@@ -465,8 +485,18 @@ export function TemplatesStudio() {
 
               <label className="tw-space-y-2">
                 <span className="tw-text-xs tw-font-semibold tw-uppercase tw-tracking-[0.14em] tw-text-slate-500">
-                  Body - Use {'{{name}}'} {'{{product}}'} {'{{dosage}}'} {'{{country}}'} {'{{rep_name}}'}
+                  Body - use dynamic variables shown below
                 </span>
+                <div className="tw-flex tw-flex-wrap tw-gap-2">
+                  {VARIABLE_CHIPS.map((item) => (
+                    <span
+                      key={item.token}
+                      className="tw-rounded-md tw-border tw-border-slate-200 tw-bg-white tw-px-2 tw-py-1 tw-text-[11px] tw-font-medium tw-text-slate-600"
+                    >
+                      {item.token}
+                    </span>
+                  ))}
+                </div>
                 <Textarea
                   className="tw-min-h-[370px] tw-rounded-xl tw-border-slate-200 tw-bg-slate-50 tw-font-medium tw-leading-7"
                   value={selectedTemplate.body || ''}

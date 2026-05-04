@@ -47,6 +47,56 @@ const LeadSchema = new mongoose.Schema(
       default: '',
       index: true,
     },
+    dosage: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: '',
+    },
+    quantity: {
+      type: Number,
+      default: null,
+    },
+    price: {
+      type: Number,
+      default: null,
+    },
+    city: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: '',
+    },
+    postalCode: {
+      type: String,
+      trim: true,
+      maxlength: 40,
+      default: '',
+    },
+    paymentLink: {
+      type: String,
+      trim: true,
+      maxlength: 320,
+      default: '',
+    },
+    invoiceId: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: '',
+    },
+    trackingId: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: '',
+    },
+    trackingLink: {
+      type: String,
+      trim: true,
+      maxlength: 320,
+      default: '',
+    },
     date: {
       type: Date,
       required: true,

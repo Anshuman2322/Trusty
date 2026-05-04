@@ -5,7 +5,7 @@ import { Badge } from '../../components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { Textarea } from '../../components/ui/textarea'
 import { toast } from 'sonner'
-import { apiPost } from '../../lib/api'
+import { apiPost, apiPut } from '../../lib/api'
 import type { Channel } from './templates'
 import { SENDER_ACCOUNTS } from './templates'
 import { STAGE_META } from '../types'
@@ -81,6 +81,50 @@ function formatDate(iso?: string | null) {
   return date.toLocaleDateString('en-GB')
 }
 
+function buildLeadUpdatePayload(formData: Record<string, string> | undefined) {
+  if (!formData) return null
+
+  const map = {
+    product: 'product',
+    dosage: 'dosage',
+    quantity: 'quantity',
+    price: 'price',
+    address: 'address',
+    city: 'city',
+    postal_code: 'postalCode',
+    postalCode: 'postalCode',
+    country: 'country',
+    payment_link: 'paymentLink',
+    paymentLink: 'paymentLink',
+    invoice_id: 'invoiceId',
+    invoiceId: 'invoiceId',
+    tracking_id: 'trackingId',
+    trackingId: 'trackingId',
+    tracking_link: 'trackingLink',
+    trackingLink: 'trackingLink',
+  }
+
+  const payload: Record<string, unknown> = {}
+
+  Object.entries(map).forEach(([key, field]) => {
+    const value = formData[key]
+    if (value === undefined || value === null) return
+    const trimmed = String(value).trim()
+    if (!trimmed) return
+
+    if (field === 'quantity' || field === 'price') {
+      const num = Number(trimmed)
+      if (!Number.isFinite(num)) return
+      payload[field] = num
+      return
+    }
+
+    payload[field] = trimmed
+  })
+
+  return Object.keys(payload).length ? payload : null
+}
+
 export function LeadProfilePane({ activeId }: { activeId: string | null }) {
   const { records, updateAny } = useCrmOverride()
   const [noteDraft, setNoteDraft] = React.useState('')
@@ -105,7 +149,7 @@ export function LeadProfilePane({ activeId }: { activeId: string | null }) {
   const timeline = [...record.activity].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
   const notes = [...record.notes].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
   const quantityLabel = record.product.quantity ? record.product.quantity.toLocaleString() : 'N/A'
-  const unitPrice = record.product.quantity ? record.dealValue / record.product.quantity : 0
+  const unitPrice = record.product.quantity && record.details?.price ? record.details.price / record.product.quantity : 0
   const unitPriceLabel = unitPrice > 0 ? unitPrice.toFixed(2) : '0.00'
   const skuLabel = `SKU ${record.id.replace('REC-', 'ATR-')}`
   const currentStageLabel = STAGE_META[record.stage]?.label || 'New Lead'
@@ -114,6 +158,7 @@ export function LeadProfilePane({ activeId }: { activeId: string | null }) {
   const nextStageLabel = STAGE_META[nextStage]?.label || 'Next Stage'
 
   function patchRecord(next: Partial<CrmRecord>) {
+    if (!record) return
     const now = new Date().toISOString()
     updateAny(record.id, {
       ...next,
@@ -123,6 +168,7 @@ export function LeadProfilePane({ activeId }: { activeId: string | null }) {
   }
 
   function onMoveStage() {
+    if (!record) return
     const now = new Date().toISOString()
 
     const nextActivity: CrmActivity = {
@@ -142,11 +188,13 @@ export function LeadProfilePane({ activeId }: { activeId: string | null }) {
   }
 
   function onMarkHot() {
+    if (!record) return
     patchRecord({ priority: 'high' })
     toast.success('Lead marked as hot')
   }
 
-  async function onSend(payload: { channel: Channel; subject: string; body: string; senderId: string; senderAddress: string; senderLabel: string }) {
+  async function onSend(payload: { channel: Channel; subject: string; body: string; senderId: string; senderAddress: string; senderLabel: string; formData?: Record<string, string> }) {
+    if (!record) return
     const now = new Date().toISOString()
     const recipient = String(record.basicInfo.email || '').trim()
 
@@ -166,6 +214,42 @@ export function LeadProfilePane({ activeId }: { activeId: string | null }) {
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to send email')
         return
+      }
+
+      const leadPatch = buildLeadUpdatePayload(payload.formData)
+      if (leadPatch) {
+        try {
+          const result = await apiPut(`/api/leads/${record.id}`, leadPatch)
+          const updated = result?.lead
+          if (updated) {
+            patchRecord({
+              basicInfo: {
+                name: updated.name || record.basicInfo.name,
+                email: updated.email || record.basicInfo.email,
+                phone: updated.phone || record.basicInfo.phone,
+                address: updated.address,
+                city: updated.city,
+                postalCode: updated.postalCode,
+                country: updated.country,
+                company: updated.address || record.basicInfo.company,
+              },
+              product: {
+                name: updated.product || record.product.name,
+                dosage: updated.dosage || record.product.dosage,
+                quantity: Number.isFinite(updated.quantity) ? Number(updated.quantity) : record.product.quantity,
+              },
+              details: {
+                price: Number.isFinite(updated.price) ? Number(updated.price) : record.details?.price ?? null,
+                paymentLink: updated.paymentLink || record.details?.paymentLink,
+                invoiceId: updated.invoiceId || record.details?.invoiceId,
+                trackingId: updated.trackingId || record.details?.trackingId,
+                trackingLink: updated.trackingLink || record.details?.trackingLink,
+              },
+            })
+          }
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Failed to sync lead details')
+        }
       }
     }
 
@@ -190,6 +274,7 @@ export function LeadProfilePane({ activeId }: { activeId: string | null }) {
   }
 
   function onAddNote() {
+    if (!record) return
     const body = noteDraft.trim()
     if (!body) return
 
@@ -354,6 +439,49 @@ export function LeadProfilePane({ activeId }: { activeId: string | null }) {
                     <span>-</span>
                     <span>{skuLabel}</span>
                   </p>
+                  {record.product.dosage ? (
+                    <p className="tw-mt-1 tw-text-xs tw-font-medium tw-text-slate-500">Dosage: {record.product.dosage}</p>
+                  ) : null}
+                </article>
+              </section>
+
+              <section className="tw-space-y-1">
+                <p className="tw-text-[11px] tw-font-bold tw-uppercase tw-tracking-wider tw-text-slate-500">Shipping</p>
+                <article className="tw-rounded-xl tw-border tw-border-slate-200 tw-bg-white tw-px-3 tw-py-1">
+                  <p className="tw-flex tw-items-center tw-gap-1 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-slate-500">
+                    <MapPin className="tw-h-3 tw-w-3" />
+                    Address
+                  </p>
+                  <p className="tw-leading-5 tw-text-sm tw-font-medium tw-text-slate-900">
+                    {record.basicInfo.address || 'N/A'}
+                  </p>
+                  <p className="tw-mt-1 tw-text-xs tw-font-medium tw-text-slate-500">
+                    {record.basicInfo.city || 'City N/A'} · {record.basicInfo.postalCode || 'Postal N/A'}
+                  </p>
+                </article>
+              </section>
+
+              <section className="tw-space-y-1">
+                <p className="tw-text-[11px] tw-font-bold tw-uppercase tw-tracking-wider tw-text-slate-500">Payment</p>
+                <article className="tw-rounded-xl tw-border tw-border-slate-200 tw-bg-white tw-px-3 tw-py-1">
+                  <p className="tw-flex tw-items-center tw-gap-1 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-slate-500">
+                    <Tag className="tw-h-3 tw-w-3" />
+                    Invoice
+                  </p>
+                  <p className="tw-leading-5 tw-text-sm tw-font-medium tw-text-slate-900">{record.details?.invoiceId || 'N/A'}</p>
+                  <p className="tw-mt-1 tw-text-xs tw-font-medium tw-text-slate-500">Payment link: {record.details?.paymentLink || 'N/A'}</p>
+                </article>
+              </section>
+
+              <section className="tw-space-y-1">
+                <p className="tw-text-[11px] tw-font-bold tw-uppercase tw-tracking-wider tw-text-slate-500">Tracking</p>
+                <article className="tw-rounded-xl tw-border tw-border-slate-200 tw-bg-white tw-px-3 tw-py-1">
+                  <p className="tw-flex tw-items-center tw-gap-1 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-slate-500">
+                    <Package className="tw-h-3 tw-w-3" />
+                    Tracking
+                  </p>
+                  <p className="tw-leading-5 tw-text-sm tw-font-medium tw-text-slate-900">{record.details?.trackingId || 'N/A'}</p>
+                  <p className="tw-mt-1 tw-text-xs tw-font-medium tw-text-slate-500">Tracking link: {record.details?.trackingLink || 'N/A'}</p>
                 </article>
               </section>
 

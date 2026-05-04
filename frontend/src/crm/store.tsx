@@ -17,8 +17,17 @@ type LeadApi = {
   email?: string
   phone?: string
   address?: string
+  city?: string
+  postalCode?: string
   country?: string
   product?: string
+  dosage?: string
+  quantity?: number | null
+  price?: number | null
+  paymentLink?: string
+  invoiceId?: string
+  trackingId?: string
+  trackingLink?: string
   date?: string
   status?: 'new' | 'contacted' | 'converted' | string
   crmStage?: CrmRecord['stage'] | string
@@ -139,9 +148,21 @@ function mapLeadToCrmRecord(lead: LeadApi): CrmRecord {
       email: String(lead.email || ''),
       phone: String(lead.phone || ''),
       country: String(lead.country || ''),
+      address: String(lead.address || ''),
+      city: String(lead.city || ''),
+      postalCode: String(lead.postalCode || ''),
     },
     product: {
       name: String(lead.product || 'General Product'),
+      dosage: String(lead.dosage || ''),
+      quantity: Number.isFinite(lead.quantity) ? Number(lead.quantity) : undefined,
+    },
+    details: {
+      price: Number.isFinite(lead.price) ? Number(lead.price) : null,
+      paymentLink: String(lead.paymentLink || ''),
+      invoiceId: String(lead.invoiceId || ''),
+      trackingId: String(lead.trackingId || ''),
+      trackingLink: String(lead.trackingLink || ''),
     },
     activity: activity.length
       ? activity
@@ -171,6 +192,10 @@ function mergeRecord(current: CrmRecord, patch: CrmRecordPatch): CrmRecord {
     product: {
       ...current.product,
       ...resolved.product,
+    },
+    details: {
+      ...current.details,
+      ...resolved.details,
     },
     activity: resolved.activity ?? current.activity,
     notes: resolved.notes ?? current.notes,

@@ -1,0 +1,317 @@
+.tvmOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(8, 11, 24, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(6px);
+}
+
+.tvmCard {
+  width: min(1100px, 94vw);
+  max-height: 80vh;
+  background: #f9fafb;
+  border-radius: 22px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.35);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.tvmHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  background: linear-gradient(120deg, #0f172a 0%, #1f2937 48%, #0ea5a4 100%);
+  color: #f8fafc;
+}
+
+.tvmOverline {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(248, 250, 252, 0.7);
+  font-weight: 700;
+}
+
+.tvmHeader h3 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.tvmSubtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(248, 250, 252, 0.78);
+}
+
+.tvmClose {
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.tvmBody {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1.05fr);
+  gap: 16px;
+  padding: 0 22px 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.tvmPanel {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.tvmFormPanel {
+  overflow: hidden;
+}
+
+.tvmFormScroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding-right: 6px;
+  scroll-behavior: smooth;
+}
+
+.tvmPanelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tvmFieldCount {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.tvmPanelHead h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.tvmPanelHead p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+
+.tvmGroup {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  margin-bottom: 12px;
+}
+
+.tvmGroupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tvmGroupHead h5 {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #475569;
+  font-weight: 700;
+}
+
+.tvmGroupHead span {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.tvmFieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tvmField {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  font-weight: 700;
+}
+
+.tvmFieldHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tvmFieldTags {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.tvmTag {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1e293b;
+  background: #e2e8f0;
+}
+
+.tvmTagMissing {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.tvmField input {
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #cbd5f5;
+  padding: 0 12px;
+  font-size: 14px;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.tvmField.is-missing input {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.tvmField.is-missing em {
+  color: #f43f5e;
+}
+
+.tvmEmpty {
+  border-radius: 12px;
+  border: 1px dashed #cbd5f5;
+  padding: 14px;
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+}
+
+.tvmAlert {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tvmPreview {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.tvmPreviewBlock {
+  display: grid;
+  gap: 6px;
+}
+
+.tvmPreviewLabel {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.tvmPreviewBox {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 12px;
+  font-size: 13px;
+  color: #0f172a;
+  background: #ffffff;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.tvmPreviewBody {
+  font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.tvmFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 22px 18px;
+  position: sticky;
+  bottom: 0;
+  background: #f9fafb;
+}
+
+.tvmGhostBtn,
+.tvmPrimaryBtn {
+  height: 40px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 16px;
+  cursor: pointer;
+}
+
+.tvmGhostBtn {
+  border: 1px solid #cbd5f5;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.tvmPrimaryBtn {
+  border: 0;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.tvmPrimaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .tvmBody {
+    grid-template-columns: 1fr;
+  }
+
+  .tvmFieldGrid {
+    grid-template-columns: 1fr;
+  }
+}

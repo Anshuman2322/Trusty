@@ -5,6 +5,7 @@ const Lead = require('../models/Lead');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const { httpError } = require('../services/authService');
 const { sendEmail } = require('../services/emailService');
+const { buildLeadTemplateData, renderTemplate } = require('../services/templateRenderer');
 
 const leadsRouter = express.Router();
 
@@ -90,6 +91,14 @@ function normalizeOptionalDate(value) {
   return normalizeDate(value);
 }
 
+function normalizeOptionalNumber(value) {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) throw httpError(400, 'Invalid numeric value', 'VALIDATION');
+  return num;
+}
+
 function normalizeObjectId(value) {
   if (value === undefined) return undefined;
   if (!value) return null;
@@ -157,6 +166,44 @@ function buildLeadPayload(body = {}, options = {}) {
 
   if (requireAll || body.product !== undefined) {
     payload.product = normalizeText(body.product, 160);
+  }
+
+  if (requireAll || body.dosage !== undefined) {
+    payload.dosage = normalizeText(body.dosage, 120);
+  }
+
+  const quantity = normalizeOptionalNumber(body.quantity);
+  if (requireAll || quantity !== undefined) {
+    payload.quantity = quantity;
+  }
+
+  const price = normalizeOptionalNumber(body.price);
+  if (requireAll || price !== undefined) {
+    payload.price = price;
+  }
+
+  if (requireAll || body.city !== undefined) {
+    payload.city = normalizeText(body.city, 120);
+  }
+
+  if (requireAll || body.postalCode !== undefined || body.postal_code !== undefined) {
+    payload.postalCode = normalizeText(body.postalCode ?? body.postal_code, 40);
+  }
+
+  if (requireAll || body.paymentLink !== undefined || body.payment_link !== undefined) {
+    payload.paymentLink = normalizeText(body.paymentLink ?? body.payment_link, 320);
+  }
+
+  if (requireAll || body.invoiceId !== undefined || body.invoice_id !== undefined) {
+    payload.invoiceId = normalizeText(body.invoiceId ?? body.invoice_id, 120);
+  }
+
+  if (requireAll || body.trackingId !== undefined || body.tracking_id !== undefined) {
+    payload.trackingId = normalizeText(body.trackingId ?? body.tracking_id, 120);
+  }
+
+  if (requireAll || body.trackingLink !== undefined || body.tracking_link !== undefined) {
+    payload.trackingLink = normalizeText(body.trackingLink ?? body.tracking_link, 320);
   }
 
   if (requireAll || body.date !== undefined) {
@@ -406,16 +453,29 @@ leadsRouter.post('/:id/send-email', async (req, res, next) => {
 
     const subject = normalizeText(req.body?.subject, 180);
     const message = normalizeText(req.body?.message, 10000);
+    const templateDataInput = req.body?.templateData;
+    const templateData = templateDataInput && typeof templateDataInput === 'object' && !Array.isArray(templateDataInput)
+      ? templateDataInput
+      : {};
 
-    if (!subject) throw httpError(400, 'Email subject is required', 'VALIDATION');
-    if (!message || message.length < 6) {
+    const templateValues = buildLeadTemplateData({
+      lead,
+      user: req.user,
+      extraData: templateData,
+    });
+
+    const resolvedSubject = normalizeText(renderTemplate(subject, templateValues, { keepUnknown: true }), 180);
+    const resolvedMessage = normalizeText(renderTemplate(message, templateValues, { keepUnknown: true }), 10000);
+
+    if (!resolvedSubject) throw httpError(400, 'Email subject is required', 'VALIDATION');
+    if (!resolvedMessage || resolvedMessage.length < 6) {
       throw httpError(400, 'Email message must be at least 6 characters', 'VALIDATION');
     }
 
     const delivery = await sendEmail({
       to: lead.email,
-      subject,
-      body: message,
+      subject: resolvedSubject,
+      body: resolvedMessage,
     });
 
     const nextStatus = lead.status === 'new' ? 'contacted' : lead.status;
@@ -430,7 +490,7 @@ leadsRouter.post('/:id/send-email', async (req, res, next) => {
     appendActivity(lead, {
       type: 'email_sent',
       message: 'Email sent to lead',
-      meta: { subject },
+      meta: { subject: resolvedSubject },
     });
     await lead.save();
 

@@ -52,12 +52,22 @@ export interface CrmRecord {
     email: string
     phone: string
     country: string
+    address?: string
+    city?: string
+    postalCode?: string
   }
   product: {
     name: string
     dosage?: string
     quantity?: number
     raw?: string
+  }
+  details?: {
+    price?: number | null
+    paymentLink?: string
+    invoiceId?: string
+    trackingId?: string
+    trackingLink?: string
   }
   activity: Activity[]
   notes: Note[]
